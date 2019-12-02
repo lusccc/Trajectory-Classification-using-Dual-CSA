@@ -6,8 +6,8 @@ from geopy.distance import vincenty, geodesic
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 
-MAX_SEGMENT_SIZE = 200
-MIN_N_POINTS = 10
+MAX_SEGMENT_SIZE = 48
+MIN_N_POINTS = 5
 
 
 def calc_single_trj_movement_features(trj, label):
@@ -46,12 +46,8 @@ def calc_single_trj_movement_features(trj, label):
     v_segs = interp_multiple_series(v_segs)
     h_segs = interp_multiple_series(h_segs)
     for d_seg, v_seg, h_seg in zip(d_segs, v_segs, h_segs):
-        d_seg = d_seg.reshape((-1, 1))
-        v_seg = v_seg.reshape((-1, 1))
-        h_seg = h_seg.reshape((-1, 1))
 
-        features_seg = np.hstack((d_seg, v_seg, h_seg))
-        features_seg = np.expand_dims(features_seg, axis=0)
+        features_seg = np.array([d_seg, v_seg, h_seg])
         features_segments.append(features_seg)
         features_segments_labels.append(label)
 
