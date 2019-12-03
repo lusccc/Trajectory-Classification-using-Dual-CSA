@@ -1,11 +1,7 @@
 
 import numpy as np
-import matplotlib.pyplot as plt
 from pyts.image.recurrence import _trajectories
-from pyunicorn.timeseries import RecurrencePlot
-from scipy.interpolate import interp1d
 from scipy.spatial.distance import pdist, squareform
-from sklearn.preprocessing import MinMaxScaler, Normalizer, MaxAbsScaler, StandardScaler
 
 #  Settings for the embedding
 DIM = 3  # Embedding dimension

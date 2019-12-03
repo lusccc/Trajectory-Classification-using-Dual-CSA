@@ -1,9 +1,7 @@
 import math
-from math import acos
 
 import numpy as np
-from geopy.distance import vincenty, geodesic
-import matplotlib.pyplot as plt
+from geopy.distance import geodesic
 from scipy.interpolate import interp1d
 
 MAX_SEGMENT_SIZE = 48
@@ -160,4 +158,5 @@ if __name__ == '__main__':
     features_segments_labels = np.array(features_segments_labels)
     np.save('./geolife/features_segments.npy', features_segments)
     np.save('./geolife/features_segments_labels.npy', features_segments_labels)
+
 

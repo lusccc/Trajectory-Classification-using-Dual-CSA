@@ -1,13 +1,13 @@
 # coding=utf-8
 # https://heremaps.github.io/pptk/tutorials/viewer/geolife.html
+import glob
+import os
+import os.path
 import time
 
 import numpy as np
 import pandas as pd
-import glob
-import os.path
-import datetime
-import os
+
 
 def read_plt(plt_file):
     points = pd.read_csv(plt_file, skiprows=6, header=None,
