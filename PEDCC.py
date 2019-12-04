@@ -5,7 +5,7 @@ https://github.com/anlongstory/CSAE
 '''
 
 LATENT_VARIABLE_DIM = 48
-N_CLASS = 10
+N_CLASS = 6
 
 mu = np.zeros(LATENT_VARIABLE_DIM)
 sigma = np.eye(LATENT_VARIABLE_DIM)

@@ -1,7 +1,8 @@
 import numpy as np
 from keras import backend as K, Sequential
-from keras.callbacks import EarlyStopping
-from keras.layers import Conv2D, Flatten, MaxPooling2D, Reshape, UpSampling2D, Conv2DTranspose, Lambda
+from keras.callbacks import EarlyStopping, TensorBoard
+from keras.layers import Conv2D, Flatten, MaxPooling2D, Reshape, UpSampling2D, Conv2DTranspose, Lambda, \
+    BatchNormalization, Activation
 from keras.layers import Input, Dense
 from keras.models import Model
 from keras.utils import plot_model, to_categorical
@@ -25,10 +26,10 @@ def student_t(z, u, alpha=1.):
 
 def load_data():
     test_n = 100
-    x_RP = np.load('./geolife/features_RP_mats.npy')[:test_n]
+    x_RP = np.load('./geolife/features_RP_mats.npy')[:]
     n_samples = x_RP.shape[0]
-    x_centroids = get_centroids(n_samples)[:test_n]  # shape(n, 10,48)
-    y = np.load('./geolife/features_segments_labels.npy')[:test_n]
+    x_centroids = get_centroids(n_samples)[:]  # shape(n, 10,48)
+    y = np.load('./geolife/features_segments_labels.npy')[:]
     print('load_RP_mats x.shape:{} y.shape{}'.format(x_RP.shape, y.shape))
     train_x_RP, test_x_RP, train_y, test_y, \
     train_x_centroids, test_x_centroids, train_y, test_y = train_test_split(x_RP, y,
@@ -52,16 +53,17 @@ n_features = train_x_RP.shape[3]
 """ -----RP mat conv auto-encoder------"""
 RP_conv_ae = Sequential()
 activ = 'relu'
-RP_conv_ae.add(
-    Conv2D(32, (5, 5), strides=(1, 1), padding='same', activation=activ,
-           input_shape=(RP_mat_size, RP_mat_size, n_features)))
-RP_conv_ae.add(Conv2D(32, (5, 5), strides=(1, 1), padding='same', activation=activ))
+RP_conv_ae.add(Conv2D(32, (3, 3), strides=(1, 1), padding='same', input_shape=(RP_mat_size, RP_mat_size, n_features)))
+RP_conv_ae.add(BatchNormalization())
+RP_conv_ae.add(Activation(activ))
 RP_conv_ae.add(MaxPooling2D(pool_size=(2, 2)))
-RP_conv_ae.add(Conv2D(64, (3, 3), strides=(1, 1), padding='same', activation=activ))
-RP_conv_ae.add(Conv2D(64, (3, 3), strides=(1, 1), padding='same', activation=activ))
+RP_conv_ae.add(Conv2D(64, (3, 3), strides=(1, 1), padding='same'))
+RP_conv_ae.add(BatchNormalization())
+RP_conv_ae.add(Activation(activ))
 RP_conv_ae.add(MaxPooling2D(pool_size=(2, 2)))
-RP_conv_ae.add(Conv2D(128, (1, 1), strides=(1, 1), padding='same', activation=activ))
-RP_conv_ae.add(Conv2D(128, (1, 1), strides=(1, 1), padding='same', activation=activ))
+RP_conv_ae.add(Conv2D(128, (3, 3), strides=(1, 1), padding='same'))
+RP_conv_ae.add(BatchNormalization())
+RP_conv_ae.add(Activation(activ))
 RP_conv_ae.add(MaxPooling2D(pool_size=(2, 2)))
 
 RP_conv_ae.add(Flatten())
@@ -70,15 +72,17 @@ RP_conv_ae.add(Dense(units=5 * 5 * 128, activation=activ))
 RP_conv_ae.add(Reshape((5, 5, 128)))
 
 RP_conv_ae.add(UpSampling2D(size=(2, 2)))
-RP_conv_ae.add(Conv2DTranspose(128, (1, 1), strides=(1, 1), padding='same', activation=activ))
-RP_conv_ae.add(Conv2DTranspose(128, (1, 1), strides=(1, 1), padding='same', activation=activ))
+RP_conv_ae.add(Conv2DTranspose(64, (3, 3), strides=(1, 1), padding='same'))
+RP_conv_ae.add(BatchNormalization())
+RP_conv_ae.add(Activation(activ))
 RP_conv_ae.add(UpSampling2D(size=(2, 2)))
-RP_conv_ae.add(Conv2DTranspose(64, (3, 3), strides=(1, 1), padding='same', activation=activ))
-RP_conv_ae.add(Conv2DTranspose(64, (3, 3), strides=(1, 1), padding='same', activation=activ))
+RP_conv_ae.add(Conv2DTranspose(32, (3, 3), strides=(1, 1), padding='same'))
+RP_conv_ae.add(BatchNormalization())
+RP_conv_ae.add(Activation(activ))
 RP_conv_ae.add(UpSampling2D(size=(2, 2)))
-RP_conv_ae.add(Conv2DTranspose(32, (5, 5), strides=(1, 1), padding='same', activation=activ))
-RP_conv_ae.add(
-    Conv2DTranspose(n_features, (5, 5), strides=(1, 1), padding='same', activation=activ, name='RP_reconstruction'))
+RP_conv_ae.add(Conv2DTranspose(n_features, (3, 3), strides=(1, 1), padding='same'))
+RP_conv_ae.add(BatchNormalization())
+RP_conv_ae.add(Activation(activ, name='RP_reconstruction'))
 
 RP_conv_encoder = Model(inputs=RP_conv_ae.input, outputs=RP_conv_ae.get_layer(name='RP_conv_embedding').output)
 
@@ -95,15 +99,24 @@ conv_SAE = Model(
     inputs=[RP_conv_ae.get_layer(index=0).input, centroids_input],
     outputs=[classification, RP_conv_ae.get_layer('RP_reconstruction').output])
 conv_SAE.summary()
-plot_model(conv_SAE, to_file='./results/Conv_SAE.png', show_shapes=True)
+plot_model(conv_SAE, to_file='./results/RP_conv_SAE.png', show_shapes=True)
 conv_SAE.compile(loss=['kld', 'mse'], loss_weights=[1, 1], optimizer='adam')
 
 """-----------train---------------"""
 
 
 def pretrain():
-    RP_conv_ae.fit(x_RP, x_RP, batch_size=2000, epochs=5000)
-    RP_conv_ae.save('./results/ts_conv_ae.model')
+    tb = TensorBoard(log_dir='./logs',  # log 目录
+                             histogram_freq=0,  # 按照何等频率（epoch）来计算直方图，0为不计算
+                             #                  batch_size=32,     # 用多大量的数据计算直方图
+                             write_graph=True,  # 是否存储网络结构图
+                             write_grads=True,  # 是否可视化梯度直方图
+                             write_images=True,  # 是否可视化参数
+                             embeddings_freq=0,
+                             embeddings_layer_names=None,
+                             embeddings_metadata=None)
+    RP_conv_ae.fit(x_RP, x_RP, batch_size=2000, epochs=100, callbacks=[tb])
+    RP_conv_ae.save('./results/rp_conv_ae.model')
 
 
 def train():

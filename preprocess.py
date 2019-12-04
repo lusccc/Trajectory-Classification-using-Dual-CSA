@@ -23,13 +23,14 @@ def read_plt(plt_file):
 
 mode_names = ['walk', 'bike', 'bus', 'car', 'subway','train', 'airplane', 'boat', 'run', 'motorcycle', 'taxi']
 # mode_ids = {s : i + 1 for i, s in enumerate(mode_names)}
-mode_ids = {}
+modes = {}
 for i, s in enumerate(mode_names):
     if s == 'taxi':
-        mode_ids[s] = 3
+        modes[s] = 3
     else:
-        mode_ids[s] = i
-
+        modes[s] = i
+# walk, bike, bus, driving, and train.
+modes_to_use = [0,1,2,3,4,5]
 
 def read_labels(labels_file):
     labels = pd.read_csv(labels_file, skiprows=1, header=None,
@@ -40,7 +41,7 @@ def read_labels(labels_file):
     labels.columns = ['start_time', 'end_time', 'label']
 
     # replace 'label' column with integer encoding
-    labels['label'] = [mode_ids[i] for i in labels['label']]
+    labels['label'] = [modes[i] for i in labels['label']]
 
     return labels
 
@@ -76,6 +77,8 @@ def extract_trjs_with_labels(points, labels_details):
     labels_details['end_time'] = labels_details['end_time'].apply(datatime_to_timestamp)
     for idx, label_detail in labels_details.iterrows():
         label = label_detail['label']
+        if label not in modes_to_use:
+            continue
         st = label_detail['start_time']
         et = label_detail['end_time']
         trj = points[(points['time'] >= st) & (points['time'] <= et)]
