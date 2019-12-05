@@ -1,10 +1,12 @@
 import numpy as np
 
+from utils import scale_data
+
 '''
 https://github.com/anlongstory/CSAE
 '''
 
-LATENT_VARIABLE_DIM = 48
+LATENT_VARIABLE_DIM = 16
 N_CLASS = 6
 
 mu = np.zeros(LATENT_VARIABLE_DIM)
@@ -58,7 +60,7 @@ def get_centroids(n_samples):
     # shape(5,48)
     c = generate_center(u, v, G)
     cs = np.array([c for i in range(n_samples)]) # full of same element
-
+    cs = scale_data(cs)
     return cs
 
 get_centroids(1000)

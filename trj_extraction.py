@@ -21,16 +21,16 @@ def read_plt(plt_file):
 
     return points
 
-mode_names = ['walk', 'bike', 'bus', 'car', 'subway','train', 'airplane', 'boat', 'run', 'motorcycle', 'taxi']
+MODE_NAMES = ['walk', 'bike', 'bus', 'car', 'subway', 'train', 'airplane', 'boat', 'run', 'motorcycle', 'taxi']
 # mode_ids = {s : i + 1 for i, s in enumerate(mode_names)}
 modes = {}
-for i, s in enumerate(mode_names):
+for i, s in enumerate(MODE_NAMES):
     if s == 'taxi':
         modes[s] = 3
     else:
         modes[s] = i
-# walk, bike, bus, driving, and train.
-modes_to_use = [0,1,2,3,4,5]
+# walk, bike, bus, driving,.
+modes_to_use = [0,1,2,3]
 
 def read_labels(labels_file):
     labels = pd.read_csv(labels_file, skiprows=1, header=None,

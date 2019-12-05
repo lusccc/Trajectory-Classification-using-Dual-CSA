@@ -4,19 +4,26 @@ import numpy as np
 from geopy.distance import geodesic
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
+from sklearn.utils import shuffle
+
+from trj_extraction import MODE_NAMES
 
 MAX_SEGMENT_SIZE = 48
 MIN_N_POINTS = 5
 
+# walk, bike, bus, driving,.
+# modes_to_use = [0,1,2,3]
+SPEED_LIMIT = {0: 7, 1: 12, 2: 120./3.6, 3: 180./3.6}
 
 def calc_trjs_movement_features():
     i = 0
     for trj, label in zip(trjs, labels):
         print('{}/{}'.format(i, n))
+        i += 1
         if len(trj) < MIN_N_POINTS:
             print('small size:{}'.format(len(trj)))
             continue
-        i += 1
+
         calc_single_trj_movement_features(trj, label)
 
 
@@ -25,7 +32,7 @@ def calc_single_trj_movement_features(trj, label):
     n_points = len(trj)
     distances = []
     velocities = []
-    heading = []
+    headings = []
     for i in range(n_points - 1):
         p_a = (trj[i][1], trj[i][2])
         p_b = (trj[i + 1][1], trj[i + 1][2])
@@ -39,35 +46,55 @@ def calc_single_trj_movement_features(trj, label):
             continue
         # distance
         d = geodesic(p_a, p_b).meters
-        distances.append(d)
+        if d < 0:
+            print(d)
+            
         # velocity
         v = d / delta_t
-        velocities.append(v)
         # heading
         h = calc_initial_compass_bearing(p_a, p_b)
-        heading.append(h)
+
+        if v > SPEED_LIMIT[label]:
+            print('invalid speed:{} for {}'.format(v, MODE_NAMES[label]))
+            continue
+        if d < 0:
+            print('invalid distance: {}'.format(d))
+            continue
+        if v < 0:
+            print('invalid velocity: {}'.format(v))
+            continue
+
+        distances.append(d)
+        velocities.append(v)
+        headings.append(h)
+    if len(distances) < MIN_N_POINTS:
+        print('feature element num too less:{}'.format(len(distances)))
+        return
 
     distances = np.array(distances)
     velocities = np.array(velocities)
-    heading = np.array(heading)
+    headings = np.array(headings)
 
     d_segs = segment_single_series(distances)
     v_segs = segment_single_series(velocities)
-    h_segs = segment_single_series(heading)
+    h_segs = segment_single_series(headings)
 
     d_segs = interp_multiple_series(d_segs)
     v_segs = interp_multiple_series(v_segs)
     h_segs = interp_multiple_series(h_segs)
     for d_seg, v_seg, h_seg in zip(d_segs, v_segs, h_segs):
-        d_seg = savitzky_golay(d_seg, 9, 3)
-        v_seg = savitzky_golay(v_seg, 9, 3)
-        h_seg = savitzky_golay(h_seg, 9, 3)
+        # TODO problem with savitzky_golay"""
+        # d_seg = savitzky_golay(d_seg, 9, 3)
+        # v_seg = savitzky_golay(v_seg, 9, 3)
+        # h_seg = savitzky_golay(h_seg, 9, 3)
         # plt.figure()
         # plt.plot(d_seg,  c='red')
         # plt.plot(d_seg_, c='green')
         # plt.show()
+
+        # TODO remove d seg temply
         features_seg = np.array(
-            [[d, v, h] for d, v, h in zip(d_seg, v_seg, h_seg)]
+            [[ v, h] for  v, h in zip( v_seg, h_seg)]
         )
         features_seg = np.expand_dims(features_seg, axis=0)
 
@@ -241,6 +268,8 @@ def savitzky_golay(y, window_size, order, deriv=0, rate=1):
 if __name__ == '__main__':
     trjs = np.load('./geolife/trjs.npy', allow_pickle=True)[:]
     labels = np.load('./geolife/labels.npy')[:]
+    trjs, labels = shuffle(trjs, labels, random_state=0)
+
     n = len(trjs)
     features_segments = []
     features_segments_labels = []
