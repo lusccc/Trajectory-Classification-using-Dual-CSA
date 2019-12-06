@@ -1,6 +1,8 @@
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 
+
+
 def scale_data(data, scaler=StandardScaler()):
 
     data = np.array(data)
@@ -10,3 +12,5 @@ def scale_data(data, scaler=StandardScaler()):
     data = scaler.fit_transform(data)
     data = np.reshape(data, shape_)
     return data
+
+

@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 
 from utils import scale_data
 
-DIM = 3  # Embedding dimension
+DIM = 4  # Embedding dimension
 TAU = 4  # Embedding delay
 
 # Distance metric in phase space ->

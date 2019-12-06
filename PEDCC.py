@@ -1,13 +1,13 @@
 import numpy as np
 
+from params import LATENT_VARIABLE_DIM, N_CLASS
 from utils import scale_data
 
 '''
 https://github.com/anlongstory/CSAE
 '''
 
-LATENT_VARIABLE_DIM = 16
-N_CLASS = 6
+
 
 mu = np.zeros(LATENT_VARIABLE_DIM)
 sigma = np.eye(LATENT_VARIABLE_DIM)

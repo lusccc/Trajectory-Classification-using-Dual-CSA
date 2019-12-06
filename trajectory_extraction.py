@@ -8,6 +8,17 @@ import time
 import numpy as np
 import pandas as pd
 
+MODE_NAMES = ['walk', 'bike', 'bus', 'car', 'subway', 'train', 'airplane', 'boat', 'run', 'motorcycle', 'taxi']
+# mode_ids = {s : i + 1 for i, s in enumerate(mode_names)}
+modes = {}
+for i, s in enumerate(MODE_NAMES):
+    if s == 'taxi':
+        modes[s] = 3
+    else:
+        modes[s] = i
+# walk, bike, bus, driving,.
+modes_to_use = [0, 1, 2, 3]
+
 
 def read_plt(plt_file):
     points = pd.read_csv(plt_file, skiprows=6, header=None,
@@ -21,16 +32,6 @@ def read_plt(plt_file):
 
     return points
 
-MODE_NAMES = ['walk', 'bike', 'bus', 'car', 'subway', 'train', 'airplane', 'boat', 'run', 'motorcycle', 'taxi']
-# mode_ids = {s : i + 1 for i, s in enumerate(mode_names)}
-modes = {}
-for i, s in enumerate(MODE_NAMES):
-    if s == 'taxi':
-        modes[s] = 3
-    else:
-        modes[s] = i
-# walk, bike, bus, driving,.
-modes_to_use = [0,1,2,3]
 
 def read_labels(labels_file):
     labels = pd.read_csv(labels_file, skiprows=1, header=None,
@@ -45,6 +46,7 @@ def read_labels(labels_file):
 
     return labels
 
+
 def apply_labels(points, labels):
     # search points's time between which two start_time
     indices = labels['start_time'].searchsorted(points['time'], side='right') - 1
@@ -52,6 +54,7 @@ def apply_labels(points, labels):
     no_label = (indices < 0) | (points['time'].values >= labels['end_time'].iloc[indices].values)
     points['label'] = labels['label'].iloc[indices].values
     points['label'][no_label] = 0
+
 
 # modified
 def read_user(user_folder):
@@ -70,7 +73,8 @@ def read_user(user_folder):
 
     return points
 
-#my code
+
+# my code
 def extract_trjs_with_labels(points, labels_details):
     points['time'] = points['time'].apply(datatime_to_timestamp)
     labels_details['start_time'] = labels_details['start_time'].apply(datatime_to_timestamp)
@@ -92,17 +96,16 @@ def extract_trjs_with_labels(points, labels_details):
         # print('\n')
 
 
-
-
 def read_all_users(folder):
     subfolders = os.listdir(folder)
     dfs = []
     for i, sf in enumerate(subfolders):
         print('[%d/%d] processing user %s' % (i + 1, len(subfolders), sf))
-        df = read_user(os.path.join(folder,sf))
+        df = read_user(os.path.join(folder, sf))
         df['user'] = int(sf)
         dfs.append(df)
     return pd.concat(dfs)
+
 
 def datatime_to_timestamp(dt):
     # print dt
@@ -113,6 +116,7 @@ def datatime_to_timestamp(dt):
     timestamp = time.mktime(time_array)  # 单位 s
     # print timestamp
     return int(timestamp)
+
 
 if __name__ == '__main__':
     trjs = []
