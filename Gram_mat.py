@@ -110,8 +110,8 @@ def interp_2d_segs(segs, size=24):
 
         interp_i = np.linspace(0, i.max(), size)
 
-        xi = interp1d(i, x, kind='linear')(interp_i)
-        yi = interp1d(i, y, kind='linear')(interp_i)
+        xi = interp1d(i, x, kind='cubic')(interp_i)
+        yi = interp1d(i, y, kind='cubic')(interp_i)
 
 
         points = [[x, y] for x, y in zip(xi, yi)]

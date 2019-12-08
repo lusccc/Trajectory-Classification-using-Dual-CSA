@@ -14,10 +14,14 @@ modes = {}
 for i, s in enumerate(MODE_NAMES):
     if s == 'taxi':
         modes[s] = 3
+    elif s == 'train':
+        modes[s] = 4
     else:
         modes[s] = i
-# walk, bike, bus, driving,.
-modes_to_use = [0, 1, 2, 3]
+print('modes:', modes)
+# walk, bike, bus, driving, train/subway
+modes_to_use = [0, 1, 2, 3, 4]
+print('modes to use:', modes_to_use)
 
 
 def read_plt(plt_file):

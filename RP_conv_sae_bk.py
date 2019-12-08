@@ -9,7 +9,7 @@ from keras.models import Model
 from keras.utils import plot_model, to_categorical
 from sklearn.model_selection import train_test_split
 
-from PEDCC import LATENT_VARIABLE_DIM, get_centroids, N_CLASS
+from PEDCC import TOTAL_EMBEDDING_DIM, get_centroids, N_CLASS
 
 import os
 
@@ -69,7 +69,7 @@ RP_conv_ae.add(Activation(activ))
 RP_conv_ae.add(MaxPooling2D(pool_size=(2, 2)))
 
 RP_conv_ae.add(Flatten())
-RP_conv_ae.add(Dense(units=LATENT_VARIABLE_DIM, name='RP_conv_embedding'))
+RP_conv_ae.add(Dense(units=TOTAL_EMBEDDING_DIM, name='RP_conv_embedding'))
 RP_conv_ae.add(Dense(units=11 * 11 * 128, activation=activ))
 RP_conv_ae.add(Reshape((11, 11, 128)))
 
@@ -93,7 +93,7 @@ plot_model(RP_conv_ae, to_file='./results/RP_conv_ae.png', show_shapes=True)
 RP_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
 
 """--------SAE----------"""
-centroids_input = Input((N_CLASS, LATENT_VARIABLE_DIM))
+centroids_input = Input((N_CLASS, TOTAL_EMBEDDING_DIM))
 classification = classification_layer([RP_conv_ae.get_layer('RP_conv_embedding').output, centroids_input],
                                       )
 

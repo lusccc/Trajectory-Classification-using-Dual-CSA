@@ -5,18 +5,17 @@ from keras import backend as K, Sequential
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint
 from keras.engine.saving import load_model
 from keras.layers import Conv2D, Flatten, MaxPooling2D, Reshape, UpSampling2D, Conv2DTranspose, Lambda, \
-    BatchNormalization, Activation
+    BatchNormalization, Activation, concatenate
 from keras.layers import Input, Dense
 from keras.models import Model
 from keras.utils import plot_model, to_categorical
 from sklearn.model_selection import train_test_split
 
-
 import os
 
 from PEDCC import get_centroids
-from conv_ae import Conv_AE
-from params import N_CLASS, LATENT_VARIABLE_DIM
+from CAE import Conv_AE
+from params import N_CLASS, TOTAL_EMBEDDING_DIM
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -36,10 +35,9 @@ student t-distribution, as same as used in t-SNE algorithm.
     return q
 
 
-# input: concat(embedding1,embedding2), ground_truth_centroids
-# output: predicted q distribution
-classification_layer = Lambda(lambda x: student_t(K.concatenate([x[0], x[1]], axis=0), x[2]),
-                              output_shape=lambda x: (x[0][0], N_CLASS))
+# input: embedding, ground_truth_centroids
+# output: predicted q distribution, shape=(n_samples, n_class)
+classification_layer = Lambda(lambda x: student_t(x[0], x[1]), output_shape=lambda x: (x[0][0], N_CLASS))
 
 
 def load_data():
@@ -64,34 +62,31 @@ def load_data():
            train_x_Gram, test_x_Gram, train_y, test_y
 
 
-x_RP, x_Gram, \
-train_x_RP, test_x_RP, train_y, test_y, \
-train_x_centroids, test_x_centroids, train_y, test_y, \
-train_x_Gram, test_x_Gram, train_y, test_y = load_data()
-
-
 def RP_CAE():
     """ -----RP_conv_ae------"""
     RP_mat_size = train_x_RP.shape[1]  # 40
     n_RP_features = train_x_RP.shape[3]
-    RP_conv_ae = Conv_AE((RP_mat_size, RP_mat_size, n_RP_features), LATENT_VARIABLE_DIM, n_RP_features, 'RP')
+    RP_conv_ae = Conv_AE((RP_mat_size, RP_mat_size, n_RP_features), each_embedding_dim, n_RP_features, 'RP')
     RP_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
     return RP_conv_ae
+
 
 def Gram_CAE():
     """ -----Gram_conv_ae------"""
     Gram_mat_size = train_x_Gram.shape[1]  # 40
     n_Gram_features = train_x_Gram.shape[3]
-    Gram_conv_ae = Conv_AE((Gram_mat_size, Gram_mat_size, n_Gram_features), LATENT_VARIABLE_DIM, n_Gram_features,
+    Gram_conv_ae = Conv_AE((Gram_mat_size, Gram_mat_size, n_Gram_features), each_embedding_dim, n_Gram_features,
                            'Gram')
     Gram_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
     return Gram_conv_ae
 
+
 def SMAE():
     """--------SAE----------"""
-    centroids_input = Input((N_CLASS, LATENT_VARIABLE_DIM))
-    classification = classification_layer(
-        [RP_conv_ae.get_layer('RP_embedding').output, Gram_conv_ae.get_layer('Gram_embedding').output, centroids_input])
+    concat_embedding = concatenate([RP_conv_ae.get_layer('RP_embedding').output,
+                                    Gram_conv_ae.get_layer('Gram_embedding').output])
+    centroids_input = Input((N_CLASS, TOTAL_EMBEDDING_DIM))
+    classification = classification_layer([concat_embedding, centroids_input])
 
     smae = Model(
         inputs=[RP_conv_ae.get_layer(index=0).input, centroids_input, Gram_conv_ae.get_layer(index=0).input],
@@ -100,8 +95,10 @@ def SMAE():
     smae.summary()
     plot_model(smae, to_file='./results/smae.png', show_shapes=True)
     smae.compile(loss=['mse', 'kld', 'mse'], loss_weights=[1, 1, 1], optimizer='adam',
-             metrics=['accuracy', 'accuracy', 'accuracy'])
+                 metrics=['accuracy', 'accuracy', 'accuracy'])
     return smae
+
+
 
 """-----------train---------------"""
 tb = TensorBoard(log_dir='./logs',  # log 目录
@@ -120,9 +117,10 @@ def pretrain_RP(epochs=1000, batch_size=200):
     cp_path = './results/RP_conv_ae_check_point.model'
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
+    RP_conv_ae_ = RP_conv_ae
     if exists(cp_path):
-        load_model(cp_path)
-    RP_conv_ae.fit(x_RP, x_RP, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
+        RP_conv_ae_ = load_model(cp_path)
+    RP_conv_ae_.fit(x_RP, x_RP, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
 
 
 def pretrain_Gram(epochs=1000, batch_size=200):
@@ -130,9 +128,10 @@ def pretrain_Gram(epochs=1000, batch_size=200):
     cp_path = './results/Gram_conv_ae_check_point.model'
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
+    Gram_conv_ae_ = Gram_conv_ae
     if exists(cp_path):
-        load_model(cp_path)
-    Gram_conv_ae.fit(x_Gram, x_Gram, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
+        Gram_conv_ae_ = load_model(cp_path)
+    Gram_conv_ae_.fit(x_Gram, x_Gram, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
 
 
 def train_classifier(epochs=100, batch_size=200):
@@ -141,25 +140,39 @@ def train_classifier(epochs=100, batch_size=200):
                          verbose=1,
                          save_best_only=True, mode='max')
     early_stopping = EarlyStopping(monitor='val_lambda_1_loss', patience=200, verbose=2)
-    RP_conv_ae = load_model('./results/RP_ae_check_point.model')
+    RP_conv_ae = load_model('./results/RP_conv_ae_check_point.model')
     Gram_conv_ae = load_model('./results/Gram_conv_ae_check_point.model')
     hist = smae.fit([train_x_RP, train_x_centroids, train_x_Gram], [train_x_RP, train_y, train_x_Gram],
                     epochs=epochs,
                     batch_size=batch_size, shuffle=True,
                     validation_data=(
                         [test_x_RP, test_x_centroids, test_x_Gram], [test_x_RP, test_y, test_x_Gram]),
-                    callbacks=[early_stopping, tb, cp])
+                    callbacks=[early_stopping, tb, cp]
+                    )
+    #
     smae.save('./results/smae.model')
     A = np.argmax(hist.history['val_lambda_1_acc'])
     print('the optimal epoch size: {}, the value of high accuracy {}'.format(hist.epoch[A],
                                                                              np.max(hist.history['val_lambda_1_acc'])))
 
+
 if __name__ == '__main__':
+    x_RP, x_Gram, \
+    train_x_RP, test_x_RP, train_y, test_y, \
+    train_x_centroids, test_x_centroids, train_y, test_y, \
+    train_x_Gram, test_x_Gram, train_y, test_y = load_data()
+
     epochs = 30
-    batch_size = 600
+    batch_size = 800
+    """ note: each autoencoder has same embedding,
+     embedding will be concated to match TOTAL_EMBEDDING_DIM, 
+    aka. centroids has dim TOTAL_EMBEDDING_DIM"""
+    n_ae = 2
+    each_embedding_dim = int(TOTAL_EMBEDDING_DIM / n_ae)
+
     RP_conv_ae = RP_CAE()
     Gram_conv_ae = Gram_CAE()
     smae = SMAE()
-    pretrain_RP(100, batch_size)
+    pretrain_RP(250, batch_size)
     pretrain_Gram(100, batch_size)
-    train_classifier(1000, batch_size)
+    train_classifier(1000, 400)

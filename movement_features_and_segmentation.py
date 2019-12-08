@@ -4,6 +4,7 @@ import numpy as np
 from geopy.distance import geodesic
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
 from trajectory_extraction import MODE_NAMES
@@ -13,8 +14,8 @@ MIN_N_POINTS = 10
 
 # walk, bike, bus, driving,.
 # modes_to_use = [0,1,2,3]
-SPEED_LIMIT = {0: 7, 1: 12, 2: 120. / 3.6, 3: 180. / 3.6}
-ACC_LIMIT = {0: 3, 1: 3, 2: 2, 3: 10}
+SPEED_LIMIT = {0: 7, 1: 12, 2: 120. / 3.6, 3: 180. / 3.6, 4: 120 / 3.6, 5: 120 / 3.6}
+ACC_LIMIT = {0: 3, 1: 3, 2: 2, 3: 10, 4: 3, 5: 3}
 
 
 def calc_trjs_movement_features():
@@ -137,9 +138,6 @@ def segment_single_series(series, max_size=MAX_SEGMENT_SIZE):
         return np.array(segments)
 
 
-
-
-
 def check_lat_lng(p):
     lat = p[0]
     lng = p[1]
@@ -188,6 +186,7 @@ def calc_initial_compass_bearing(pointA, pointB):
 
     return compass_bearing
 
+
 def interp_multiple_series(series, target_size=MAX_SEGMENT_SIZE):
     interped = []
     for s in series:
@@ -213,11 +212,11 @@ def interp_single_series(series, target_size=MAX_SEGMENT_SIZE):
 if __name__ == '__main__':
     trjs = np.load('./geolife/trjs.npy', allow_pickle=True)
     labels = np.load('./geolife/labels.npy')[:]
-    trjs, labels = shuffle(trjs, labels, random_state=0)
+    trjs, labels = shuffle(trjs, labels, random_state=0)  # !!!shuffle
 
-    n_test = 1000
-    trjs = trjs[:n_test]
-    labels = labels[:n_test]
+    # n_test = 1000
+    # trjs = trjs[:n_test]
+    # labels = labels[:n_test]
 
     n = len(trjs)
     trjs_segments = []
@@ -229,6 +228,17 @@ if __name__ == '__main__':
     trjs_segments = np.array(trjs_segments)
     features_segments = np.array(features_segments)
     segments_labels = np.array(segments_labels)
-    np.save('./geolife/trjs_segments.npy', trjs_segments)
-    np.save('./geolife/features_segments.npy', features_segments)
-    np.save('./geolife/segments_labels.npy', segments_labels)
+
+    train_trjs_segments, test_trjs_segments, \
+    train_features_segments, test_features_segments, \
+    train_segments_labels, test_segments_labels = train_test_split(trjs_segments, features_segments, segments_labels,
+                                                                   test_size=0.20, random_state=7, shuffle=True)
+
+    np.save('./geolife/train_trjs_segments.npy', train_trjs_segments)
+    np.save('./geolife/test_trjs_segments.npy', test_trjs_segments)
+
+    np.save('./geolife/train_features_segments.npy', train_features_segments)
+    np.save('./geolife/test_features_segments.npy', test_features_segments)
+
+    np.save('./geolife/train_segments_labels.npy', train_segments_labels)
+    np.save('./geolife/test_segments_labels.npy', test_segments_labels)
