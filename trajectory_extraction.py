@@ -19,7 +19,7 @@ for i, s in enumerate(MODE_NAMES):
     else:
         modes[s] = i
 print('modes:', modes)
-# walk, bike, bus, driving, train/subway
+# walk, bike, bus, driving, //or train/subway
 modes_to_use = [0, 1, 2, 3, 4]
 print('modes to use:', modes_to_use)
 

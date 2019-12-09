@@ -12,13 +12,16 @@ from trajectory_extraction import MODE_NAMES
 MAX_SEGMENT_SIZE = 100
 MIN_N_POINTS = 10
 
-# walk, bike, bus, driving,.
-# modes_to_use = [0,1,2,3]
+# walk, bike, bus, driving, train/subway
+# modes_to_use = [0,1,2,3,4]
 SPEED_LIMIT = {0: 7, 1: 12, 2: 120. / 3.6, 3: 180. / 3.6, 4: 120 / 3.6, 5: 120 / 3.6}
 ACC_LIMIT = {0: 3, 1: 3, 2: 2, 3: 10, 4: 3, 5: 3}
 
 
-def calc_trjs_movement_features():
+# TODO heading change rate limit
+
+
+def calc_trjs_features():
     i = 0
     for trj, label in zip(trjs, labels):
         print('{}/{}'.format(i, n))
@@ -27,19 +30,25 @@ def calc_trjs_movement_features():
             print('trj small size:{}'.format(len(trj)))
             continue
 
-        calc_single_trj_movement_features(trj, label)
+        calc_single_trj_features(trj, label)
 
 
-def calc_single_trj_movement_features(trj, label):
+def calc_single_trj_features(trj, label):
     trj = np.array(trj)
     n_points = len(trj)
 
-    invalid_points = []  # index
+    invalid_points = []  # noise points index
+    # below 3 spatial features
     distances = []
-    velocities = []
     headings = []
+    heading_changes = []
+    # below 3 movement features
+    velocities = []
+    heading_change_rates = []
     accelerations = [0]  # init acceleration
+
     prev_v = 0  # previous velocity
+    prev_h = 0  # previous heading
     for i in range(n_points - 1):
         p_a = [trj[i][1], trj[i][2]]
         p_b = [trj[i + 1][1], trj[i + 1][2]]
@@ -78,13 +87,20 @@ def calc_single_trj_movement_features(trj, label):
             invalid_points.append(i + 1)
             print('invalid acc:{} for {}'.format(a, MODE_NAMES[label]))
             continue
+
         # heading
         h = calc_initial_compass_bearing(p_a, p_b)
+        # heading change
+        hc = h - prev_h
+        # heading change rate
+        hcr = hc / delta_t
 
         distances.append(d)
         velocities.append(v)
         accelerations.append(a)
         headings.append(h)
+        heading_changes.append(hc)
+        heading_change_rates.append(hcr)
 
     if len(distances) < MIN_N_POINTS:
         print('feature element num not enough:{}'.format(len(distances)))
@@ -92,30 +108,45 @@ def calc_single_trj_movement_features(trj, label):
 
     trj_filtered = np.delete(trj, invalid_points, axis=0)  # delete invalid points(rows)
     distances = np.array(distances)
-    velocities = np.array(velocities)
     headings = np.array(headings)
+    heading_changes = np.array(heading_changes)
+    velocities = np.array(velocities)
     accelerations = np.array(accelerations)
+    heading_change_rates = np.array(heading_change_rates)
 
     trj_segs = segment_single_series(trj_filtered)
     d_segs = segment_single_series(distances)
-    v_segs = segment_single_series(velocities)
     h_segs = segment_single_series(headings)
+    hc_segs = segment_single_series(heading_changes)
+    v_segs = segment_single_series(velocities)
     a_segs = segment_single_series(accelerations)
+    hcr_segs = segment_single_series(heading_change_rates)
 
     # no need to interp trjs
     d_segs = interp_multiple_series(d_segs)
-    v_segs = interp_multiple_series(v_segs)
     h_segs = interp_multiple_series(h_segs)
+    hc_segs = interp_multiple_series(hc_segs)
+    v_segs = interp_multiple_series(v_segs)
     a_segs = interp_multiple_series(a_segs)
-    for trj_seg, d_seg, v_seg, h_seg, a_seg in zip(trj_segs, d_segs, v_segs, h_segs, a_segs):
-        # trj_seg = np.expand_dims(trj_seg, axis=0)
+    hcr_segs = interp_multiple_series(hcr_segs)
+    for trj_seg, d_seg, h_seg, hc_seg, v_seg, a_seg, hcr_seg in \
+            zip(trj_segs, d_segs, h_segs, hc_segs, v_segs, a_segs, hcr_segs):
         trjs_segments.append(trj_seg)
 
-        features_seg = np.array(
-            [[v, h, a] for v, h, a in zip(v_seg, h_seg, a_seg)]
+        # movment features seg
+        m_features_seg = np.array(
+            [[v, a, hcr] for v, a, hcr in zip(v_seg, a_seg, hcr_seg)]
         )
-        features_seg = np.expand_dims(features_seg, axis=0)
-        features_segments.append(features_seg)
+        m_features_seg = np.expand_dims(m_features_seg, axis=0)
+        m_features_segments.append(m_features_seg)
+
+        # spatial features seg
+        s_features_seg = np.array(
+            [[d, h, hc] for d, h, hc in zip(d_seg, h_seg, hc_seg)]
+        )
+        s_features_seg = np.expand_dims(s_features_seg, axis=0)
+        s_features_segments.append(s_features_seg)
+
         segments_labels.append(label)
 
 
@@ -211,34 +242,43 @@ def interp_single_series(series, target_size=MAX_SEGMENT_SIZE):
 
 if __name__ == '__main__':
     trjs = np.load('./geolife/trjs.npy', allow_pickle=True)
-    labels = np.load('./geolife/labels.npy')[:]
+    labels = np.load('./geolife/labels.npy')
     trjs, labels = shuffle(trjs, labels, random_state=0)  # !!!shuffle
 
-    # n_test = 1000
-    # trjs = trjs[:n_test]
-    # labels = labels[:n_test]
+    n_test = 1000
+    trjs = trjs[:n_test]
+    labels = labels[:n_test]
 
     n = len(trjs)
+
+    # below 4 array has same element num
     trjs_segments = []
-    features_segments = []
+    m_features_segments = []  # movement features segs
+    s_features_segments = []  # spatial features segs
     segments_labels = []
 
-    calc_trjs_movement_features()
+    calc_trjs_features()
 
     trjs_segments = np.array(trjs_segments)
-    features_segments = np.array(features_segments)
+    m_features_segments = np.array(m_features_segments)
+    s_features_segments = np.array(s_features_segments)
     segments_labels = np.array(segments_labels)
 
     train_trjs_segments, test_trjs_segments, \
-    train_features_segments, test_features_segments, \
-    train_segments_labels, test_segments_labels = train_test_split(trjs_segments, features_segments, segments_labels,
+    train_mf_segments, test_mf_segments, \
+    train_sf_segments, test_sf_segments, \
+    train_segments_labels, test_segments_labels = train_test_split(trjs_segments, m_features_segments,
+                                                                   s_features_segments, segments_labels,
                                                                    test_size=0.20, random_state=7, shuffle=True)
 
     np.save('./geolife/train_trjs_segments.npy', train_trjs_segments)
     np.save('./geolife/test_trjs_segments.npy', test_trjs_segments)
 
-    np.save('./geolife/train_features_segments.npy', train_features_segments)
-    np.save('./geolife/test_features_segments.npy', test_features_segments)
+    np.save('./geolife/train_mf_segments.npy', train_mf_segments)
+    np.save('./geolife/test_mf_segments.npy', test_mf_segments)
+
+    np.save('./geolife/train_sf_segments.npy', train_sf_segments)
+    np.save('./geolife/test_sf_segments.npy', test_sf_segments)
 
     np.save('./geolife/train_segments_labels.npy', train_segments_labels)
     np.save('./geolife/test_segments_labels.npy', test_segments_labels)

@@ -68,8 +68,8 @@ def repeat(c, n, scale=True):
 
 
 if __name__ == '__main__':
-    x_train_RP = np.load('./geolife/train_features_RP_mats.npy')
-    x_test_RP = np.load('./geolife/test_features_RP_mats.npy')
+    x_train_RP = np.load('./geolife/train_mf_RP_mats.npy')
+    x_test_RP = np.load('./geolife/test_mf_RP_mats.npy')
 
     n_train = x_train_RP.shape[0]
     n_test = x_test_RP.shape[0]

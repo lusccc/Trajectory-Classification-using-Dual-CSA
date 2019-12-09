@@ -66,14 +66,15 @@ def sign(m, n):
 if __name__ == '__main__':
 
     scale_each_feature = True
-    scale_all = False
+    scale_all = True
 
     data_type = {'train', 'test'}
 
     for type in data_type:
-        features_segments = np.load('./geolife/{}_features_segments.npy'.format(type))
+        print('++++++++data type:', type)
+        features_segments = np.load('./geolife/{}_mf_segments.npy'.format(type))
         features_segments_labels = np.load('./geolife/{}_segments_labels.npy'.format(type))
-        for i in range(2):
+        for i in range(features_segments.shape[3]):
             f = features_segments[:, :, :, i]
             max = np.max(f)
             min = np.min(f)
@@ -98,4 +99,4 @@ if __name__ == '__main__':
         max = np.max(features_RP_mats)
         min = np.min(features_RP_mats)
         print('RP mat value range:', min, max)
-        np.save('./geolife/{}_features_RP_mats.npy'.format(type), features_RP_mats)
+        np.save('./geolife/{}_mf_RP_mats.npy'.format(type), features_RP_mats)
