@@ -14,7 +14,7 @@ from sklearn.model_selection import train_test_split
 import os
 
 from PEDCC import get_centroids
-from CAE import Conv_AE
+from Conv2D_AE import Conv2D_AE
 from params import N_CLASS, TOTAL_EMBEDDING_DIM
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -66,7 +66,7 @@ def RP_CAE():
     """ -----RP_conv_ae------"""
     RP_mat_size = train_x_RP.shape[1]  # 40
     n_RP_features = train_x_RP.shape[3]
-    RP_conv_ae = Conv_AE((RP_mat_size, RP_mat_size, n_RP_features), each_embedding_dim, n_RP_features, 'RP')
+    RP_conv_ae = Conv2D_AE((RP_mat_size, RP_mat_size, n_RP_features), each_embedding_dim, n_RP_features, 'RP')
     RP_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
     return RP_conv_ae
 
@@ -75,7 +75,7 @@ def Gram_CAE():
     """ -----Gram_conv_ae------"""
     Gram_mat_size = train_x_Gram.shape[1]  # 40
     n_Gram_features = train_x_Gram.shape[3]
-    Gram_conv_ae = Conv_AE((Gram_mat_size, Gram_mat_size, n_Gram_features), each_embedding_dim, n_Gram_features,
+    Gram_conv_ae = Conv2D_AE((Gram_mat_size, Gram_mat_size, n_Gram_features), each_embedding_dim, n_Gram_features,
                            'Gram')
     Gram_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
     return Gram_conv_ae

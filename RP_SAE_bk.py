@@ -17,7 +17,7 @@ from sklearn.model_selection import train_test_split
 
 import os
 
-from CAE import Conv_AE
+from Conv2D_AE import Conv2D_AE
 from params import N_CLASS, TOTAL_EMBEDDING_DIM
 from trajectory_extraction import modes_to_use
 
@@ -65,7 +65,7 @@ def RP_CAE():
     """ -----RP_conv_ae------"""
     RP_mat_size = x_train_RP.shape[1]  # 40
     n_RP_features = x_train_RP.shape[3]
-    RP_conv_ae = Conv_AE((RP_mat_size, RP_mat_size, n_RP_features), each_embedding_dim, n_RP_features, 'RP')
+    RP_conv_ae = Conv2D_AE((RP_mat_size, RP_mat_size, n_RP_features), each_embedding_dim, n_RP_features, 'RP')
     RP_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
     return RP_conv_ae
 

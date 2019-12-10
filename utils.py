@@ -3,7 +3,7 @@ import numpy as np
 
 
 
-def scale_1d_data(data, scaler=StandardScaler()):
+def scale_1d_data(data, scaler=MinMaxScaler()):
 
     data = np.array(data)
     shape_ = data.shape
@@ -13,7 +13,7 @@ def scale_1d_data(data, scaler=StandardScaler()):
     data = np.reshape(data, shape_)
     return data
 
-def scale_data(data, scaler=StandardScaler()):
+def scale_data(data, scaler=MinMaxScaler()):
 
     data = np.array(data)
     data = scaler.fit_transform(data)

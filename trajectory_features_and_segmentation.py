@@ -7,15 +7,21 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
+from params import MIN_N_POINTS, MAX_SEGMENT_SIZE
 from trajectory_extraction import MODE_NAMES
-
-MAX_SEGMENT_SIZE = 100
-MIN_N_POINTS = 10
 
 # walk, bike, bus, driving, train/subway
 # modes_to_use = [0,1,2,3,4]
+from utils import scale_data
+
 SPEED_LIMIT = {0: 7, 1: 12, 2: 120. / 3.6, 3: 180. / 3.6, 4: 120 / 3.6, 5: 120 / 3.6}
+# acceleration
 ACC_LIMIT = {0: 3, 1: 3, 2: 2, 3: 10, 4: 3, 5: 3}
+# heading change rate limit
+HCR_LIMIT = {0: 30, 1:50, 2:60, 3:90, 4:20}
+STOP_DISTANCE_LIMIT = 5  # meters
+STOP_VELOCITY_LIMIT = 5
+STRAIGHT_MOVING_DEGREE_LIMIT = 30  # abs value, less than this limit mean still straight
 
 
 # TODO heading change rate limit
@@ -46,6 +52,11 @@ def calc_single_trj_features(trj, label):
     velocities = []
     heading_change_rates = []
     accelerations = [0]  # init acceleration
+
+    # is stop,0~1, 0:not stop, 1:stop,  we define first point is moving
+    stops = [0]
+    # is turning,0~1, 0:not turning, 1:turning,  we define first point is not turning
+    turnings = [0]
 
     prev_v = 0  # previous velocity
     prev_h = 0  # previous heading
@@ -94,6 +105,14 @@ def calc_single_trj_features(trj, label):
         hc = h - prev_h
         # heading change rate
         hcr = hc / delta_t
+        if hcr > HCR_LIMIT[label]:
+            invalid_points.append(i + 1)
+            print('invalid hcr:{} for {}'.format(hcr, MODE_NAMES[label]))
+            continue
+        # is stop point
+        s = 1 if d < STOP_DISTANCE_LIMIT else 0  #1-(d/STOP_DISTANCE_LIMIT)
+        # is turning point
+        tn = 1 if abs(hc) < STRAIGHT_MOVING_DEGREE_LIMIT else 0 #1-(abs(hc)/STRAIGHT_MOVING_DEGREE_LIMIT)
 
         distances.append(d)
         velocities.append(v)
@@ -101,6 +120,11 @@ def calc_single_trj_features(trj, label):
         headings.append(h)
         heading_changes.append(hc)
         heading_change_rates.append(hcr)
+        stops.append(s)
+        turnings.append(tn)
+
+        prev_v = v
+        prev_h = h
 
     if len(distances) < MIN_N_POINTS:
         print('feature element num not enough:{}'.format(len(distances)))
@@ -113,6 +137,8 @@ def calc_single_trj_features(trj, label):
     velocities = np.array(velocities)
     accelerations = np.array(accelerations)
     heading_change_rates = np.array(heading_change_rates)
+    stops = np.array(stops)
+    turnings = np.array(turnings)
 
     trj_segs = segment_single_series(trj_filtered)
     d_segs = segment_single_series(distances)
@@ -121,6 +147,8 @@ def calc_single_trj_features(trj, label):
     v_segs = segment_single_series(velocities)
     a_segs = segment_single_series(accelerations)
     hcr_segs = segment_single_series(heading_change_rates)
+    s_segs = segment_single_series(stops)
+    tn_segs = segment_single_series(turnings)
 
     # no need to interp trjs
     d_segs = interp_multiple_series(d_segs)
@@ -129,21 +157,25 @@ def calc_single_trj_features(trj, label):
     v_segs = interp_multiple_series(v_segs)
     a_segs = interp_multiple_series(a_segs)
     hcr_segs = interp_multiple_series(hcr_segs)
-    for trj_seg, d_seg, h_seg, hc_seg, v_seg, a_seg, hcr_seg in \
-            zip(trj_segs, d_segs, h_segs, hc_segs, v_segs, a_segs, hcr_segs):
+    s_segs = interp_multiple_series(s_segs)
+    tn_segs = interp_multiple_series(tn_segs)
+
+    for trj_seg, d_seg, h_seg, hc_seg, v_seg, a_seg, hcr_seg, s_seg, tn_seg in \
+            zip(trj_segs, d_segs, h_segs, hc_segs, v_segs, a_segs, hcr_segs, s_segs, tn_segs):
         trjs_segments.append(trj_seg)
 
-        # movment features seg
+        # movement features seg
         m_features_seg = np.array(
-            [[v, a, hcr] for v, a, hcr in zip(v_seg, a_seg, hcr_seg)]
+            [[v, a, hcr, s, tn] for v, a, hcr, s, tn in zip(v_seg, a_seg, hcr_seg, s_seg, tn_seg)]
         )
         m_features_seg = np.expand_dims(m_features_seg, axis=0)
         m_features_segments.append(m_features_seg)
 
         # spatial features seg
         s_features_seg = np.array(
-            [[d, h, hc] for d, h, hc in zip(d_seg, h_seg, hc_seg)]
+            [[d, h, hc, s, tn] for d, h, hc, s, tn in zip(d_seg, h_seg, hc_seg, s_seg, tn_seg)]
         )
+        # ???? for time series, no need to expand dim
         s_features_seg = np.expand_dims(s_features_seg, axis=0)
         s_features_segments.append(s_features_seg)
 
@@ -239,6 +271,17 @@ def interp_single_series(series, target_size=MAX_SEGMENT_SIZE):
         interp_y = interp1d(x, y, kind='linear')(interp_x)
         return interp_y
 
+def scale_segs(segs):
+    ori_shape = segs.shape
+    n_features = ori_shape[3]
+    total_points = ori_shape[0] * ori_shape[2]
+    all = segs.reshape((total_points, n_features))
+    all = scale_data(all)
+    scaled_segs = all.reshape(ori_shape)
+    return scaled_segs
+
+
+
 
 if __name__ == '__main__':
     trjs = np.load('./geolife/trjs.npy', allow_pickle=True)
@@ -270,6 +313,9 @@ if __name__ == '__main__':
     train_segments_labels, test_segments_labels = train_test_split(trjs_segments, m_features_segments,
                                                                    s_features_segments, segments_labels,
                                                                    test_size=0.20, random_state=7, shuffle=True)
+
+    train_sf_segments = scale_segs(train_sf_segments)
+    test_sf_segments = scale_segs(test_sf_segments)
 
     np.save('./geolife/train_trjs_segments.npy', train_trjs_segments)
     np.save('./geolife/test_trjs_segments.npy', test_trjs_segments)
