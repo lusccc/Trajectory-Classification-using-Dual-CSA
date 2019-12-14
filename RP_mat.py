@@ -8,7 +8,7 @@ from scipy.spatial.distance import pdist, squareform
 #  Settings for the embedding
 from sklearn.preprocessing import StandardScaler
 
-from params import DIM, TAU
+from params import DIM, TAU, RP_MAT_SCALE_EACH_FEATURE, RP_MAT_SCALE_ALL
 from utils import scale_1d_data
 from multiprocessing import Process, Lock
 
@@ -90,8 +90,8 @@ def sign(m, n):
 
 if __name__ == '__main__':
 
-    scale_each_feature = True
-    scale_all = True
+    scale_each_feature = RP_MAT_SCALE_EACH_FEATURE
+    scale_all = RP_MAT_SCALE_ALL
 
     data_type = {'train', 'test'}
 

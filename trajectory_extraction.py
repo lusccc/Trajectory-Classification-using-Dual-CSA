@@ -3,10 +3,12 @@
 import glob
 import os
 import os.path
-import time
+
 
 import numpy as np
 import pandas as pd
+
+from time_utils import datatime_to_timestamp
 
 MODE_NAMES = ['walk', 'bike', 'bus', 'car', 'subway', 'train', 'airplane', 'boat', 'run', 'motorcycle', 'taxi']
 # mode_ids = {s : i + 1 for i, s in enumerate(mode_names)}
@@ -110,16 +112,6 @@ def read_all_users(folder):
         dfs.append(df)
     return pd.concat(dfs)
 
-
-def datatime_to_timestamp(dt):
-    # print dt
-    """时间转换为时间戳，单位秒"""
-    # 转换成时间数组
-    time_array = time.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
-    # 转换成时间戳
-    timestamp = time.mktime(time_array)  # 单位 s
-    # print timestamp
-    return int(timestamp)
 
 
 if __name__ == '__main__':

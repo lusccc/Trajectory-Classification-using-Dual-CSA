@@ -17,12 +17,9 @@ from sklearn.model_selection import train_test_split
 
 import os
 
-from Conv2D_AE import Conv2D_AE
-from LSTM_AE import LSTM_AE
+from Conv2D_AE import Conv2D_AE, CAE
 from params import N_CLASS, TOTAL_EMBEDDING_DIM
-from TS_Conv2D_AE import TS_Conv2D_AE
 from trajectory_extraction import modes_to_use
-from trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -53,10 +50,6 @@ def load_data():
     # test data cannot used to train ae, because it will tell the model test data information
     # x_RP = np.concatenate([x_train_RP, x_test_RP], axis=0)
 
-    # spatial features segs
-    x_train_SF = np.load('./geolife/train_sf_segments.npy')
-    x_test_SF = np.load('./geolife/test_sf_segments.npy')
-
     x_train_centroids = np.load('./geolife/train_centroids.npy')
     x_test_centroids = np.load('./geolife/test_centroids.npy')
 
@@ -65,46 +58,33 @@ def load_data():
 
     y_train = to_categorical(y_train, num_classes=N_CLASS)
     y_test = to_categorical(y_test, num_classes=N_CLASS)
-    return x_train_RP, x_test_RP, x_train_SF, x_test_SF, x_train_centroids, \
-           x_test_centroids, y_train, y_test
+    return x_train_RP, x_test_RP, x_train_centroids, x_test_centroids, y_train, y_test
 
 
-def RP_Conv2D_AE():
+def RP_CAE():
     """ -----RP_conv_ae------"""
     RP_mat_size = x_train_RP.shape[1]  # 40
     n_RP_features = x_train_RP.shape[3]
     RP_conv_ae = Conv2D_AE((RP_mat_size, RP_mat_size, n_RP_features), each_embedding_dim, n_RP_features, 'RP')
+    # RP_conv_ae = CAE(each_embedding_dim, n_RP_features, 'RP', (RP_mat_size, RP_mat_size, n_RP_features))
     RP_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
     return RP_conv_ae
 
-def spatial_LSTM_AE():
-    n_SF_features = x_train_SF.shape[2]
-    lstm_ae = LSTM_AE(MAX_SEGMENT_SIZE, each_embedding_dim, n_SF_features, 'spatial')
-    lstm_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
-    return lstm_ae
 
-def spatial_Conv2d_AE():
-    n_SF_features = x_train_SF.shape[3]
-    spatial_conv1d_ae = TS_Conv2D_AE((1, MAX_SEGMENT_SIZE, n_SF_features), each_embedding_dim, n_SF_features, 'spatial')
-    spatial_conv1d_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
-    return spatial_conv1d_ae
-
-
-def dual_SAE():
+def SAE():
     """--------SAE----------"""
-    concat_embedding = concatenate([RP_conv2d_ae.get_layer('RP_embedding').output,
-                                    spatial_conv2d_ae.get_layer('spatial_embedding').output])
     centroids_input = Input((N_CLASS, TOTAL_EMBEDDING_DIM))
-    classification = classification_layer([concat_embedding, centroids_input])
+    classification = classification_layer([RP_conv_ae.get_layer('RP_embedding').output, centroids_input])
+    # classification = Dense(N_CLASS, activation='softmax')(classification)
 
-    d_sae = Model(
-        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, spatial_conv2d_ae.get_layer(index=0).input],
-        outputs=[RP_conv2d_ae.get_layer('RP_reconstruction').output, classification, spatial_conv2d_ae.get_layer('spatial_reconstruction').output])
-    d_sae.summary()
-    plot_model(d_sae, to_file='./results/dual_sae.png', show_shapes=True)
-    d_sae.compile(loss=['mse', 'kld', 'mse'], loss_weights=[1, 3, 1], optimizer='adam',
-                metrics=['accuracy', categorical_accuracy, 'accuracy'])
-    return d_sae
+    sae = Model(
+        inputs=[RP_conv_ae.get_layer(index=0).input, centroids_input],
+        outputs=[RP_conv_ae.get_layer('RP_reconstruction').output, classification])
+    sae.summary()
+    plot_model(sae, to_file='./results/sae.png', show_shapes=True)
+    sae.compile(loss=['mse', 'kld'], loss_weights=[1, 3], optimizer='adam',
+                metrics=['accuracy', categorical_accuracy])
+    return sae
 
 
 """-----------train---------------"""
@@ -127,36 +107,10 @@ def pretrain_RP(epochs=1000, batch_size=200):
     cp_path = './results/RP_conv_ae_check_point.model'
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
-    RP_conv_ae_ = RP_conv2d_ae
+    RP_conv_ae_ = RP_conv_ae
     if exists(cp_path):
         RP_conv_ae_ = load_model(cp_path)
     RP_conv_ae_.fit(x_train_RP, x_train_RP, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
-
-# def pretrain_lstm_ae(epochs=1000, batch_size=200):
-#     """
-#     pretrain is unsupervised, all data could use to train
-#     """
-#     print('pretrain_lstm_ae')
-#     cp_path = './results/spatial_lstm_ae_check_point.model'
-#     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
-#                          save_best_only=True, mode='min')
-#     spatial_lstm_ae_ = spatial_lstm_ae
-#     if exists(cp_path):
-#         spatial_lstm_ae_ = load_model(cp_path)
-#     spatial_lstm_ae_.fit(x_train_SF, x_train_SF, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
-
-def pretrain_spatial(epochs=1000, batch_size=200):
-    """
-    pretrain is unsupervised, all data could use to train
-    """
-    print('pretrain_spatial')
-    cp_path = './results/spatial_conv1d_ae_check_point.model'
-    cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
-                         save_best_only=True, mode='min')
-    spatial_conv1d_ae_ = spatial_conv2d_ae
-    if exists(cp_path):
-        spatial_conv1d_ae_ = load_model(cp_path)
-    spatial_conv1d_ae_.fit(x_train_SF, x_train_SF, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
 
 
 def train_classifier(epochs=100, batch_size=200):
@@ -166,23 +120,23 @@ def train_classifier(epochs=100, batch_size=200):
                          save_best_only=True, mode='max')
     early_stopping = EarlyStopping(monitor='val_lambda_1_loss', patience=100, verbose=2)
     RP_conv_ae = load_model('./results/RP_conv_ae_check_point.model')
-    spatial_conv1d_ae_ = load_model('./results/spatial_conv1d_ae_check_point.model')
-    hist = dual_sae.fit([x_train_RP, x_train_centroids, x_train_SF], [x_train_RP, y_train, x_train_SF],
-                        epochs=epochs,
-                        batch_size=batch_size, shuffle=True,
-                        validation_data=(
-                       [x_test_RP, x_test_centroids, x_test_SF], [x_test_RP, y_test, x_test_SF]),
-                        callbacks=[early_stopping, tb, cp]
-                        )
+    hist = sae.fit([x_train_RP, x_train_centroids], [x_train_RP, y_train],
+                   epochs=epochs,
+                   batch_size=batch_size, shuffle=True,
+                   validation_data=(
+                       [x_test_RP, x_test_centroids], [x_test_RP, y_test]),
+                   callbacks=[early_stopping, tb, cp]
+                   )
     #
-    score = np.argmax(hist.history['val_lambda_1_acc'])
-    print('the optimal epoch size: {}, the value of high accuracy {}'.format(hist.epoch[score],
+    sae.save('./results/sae.model')
+    A = np.argmax(hist.history['val_lambda_1_acc'])
+    print('the optimal epoch size: {}, the value of high accuracy {}'.format(hist.epoch[A],
                                                                              np.max(hist.history['val_lambda_1_acc'])))
 
 
 def show_confusion_matrix():
     sae = load_model('./results/sae_check_point.model', custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
-    pred = sae.predict([x_test_RP, x_test_centroids, x_test_SF])
+    pred = sae.predict([x_test_RP, x_test_centroids])
     y_pred = np.argmax(pred[1], axis=1)
     y_true = np.argmax(y_test, axis=1)
     cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)
@@ -199,22 +153,18 @@ def show_confusion_matrix():
 
 
 if __name__ == '__main__':
-    x_train_RP, x_test_RP, x_train_SF, x_test_SF, x_train_centroids, \
-    x_test_centroids, y_train, y_test = load_data()
+    x_train_RP, x_test_RP, x_train_centroids, x_test_centroids, y_train, y_test = load_data()
 
     epochs = 30
     batch_size = 300
     """ note: each autoencoder has same embedding,
      embedding will be concated to match TOTAL_EMBEDDING_DIM, 
     aka. centroids has dim TOTAL_EMBEDDING_DIM"""
-    n_ae = 2 #num of ae
+    n_ae = 1
     each_embedding_dim = int(TOTAL_EMBEDDING_DIM / n_ae)
 
-    RP_conv2d_ae = RP_Conv2D_AE()
-    # spatial_lstm_ae = spatial_LSTM_AE()
-    spatial_conv2d_ae = spatial_Conv2d_AE()
-    dual_sae = dual_SAE()
+    RP_conv_ae = RP_CAE()
+    sae = SAE()
     pretrain_RP(100, batch_size)
-    pretrain_spatial(100, batch_size)
     train_classifier(5000, batch_size)
     show_confusion_matrix()

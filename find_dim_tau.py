@@ -1,5 +1,5 @@
 def find_dim_tau():
-    for n in range(0, 200):
+    for n in range(0, 400):
         for dim in range(0, 10):
             for tau in range(0, 10):
                 n_vectors = n - tau * (dim - 1)

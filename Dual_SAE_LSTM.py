@@ -93,13 +93,13 @@ def spatial_Conv2d_AE():
 def dual_SAE():
     """--------SAE----------"""
     concat_embedding = concatenate([RP_conv2d_ae.get_layer('RP_embedding').output,
-                                    spatial_conv2d_ae.get_layer('spatial_embedding').output])
+                                    spatial_lstm_ae.get_layer('spatial_embedding').output])
     centroids_input = Input((N_CLASS, TOTAL_EMBEDDING_DIM))
     classification = classification_layer([concat_embedding, centroids_input])
 
     d_sae = Model(
-        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, spatial_conv2d_ae.get_layer(index=0).input],
-        outputs=[RP_conv2d_ae.get_layer('RP_reconstruction').output, classification, spatial_conv2d_ae.get_layer('spatial_reconstruction').output])
+        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, spatial_lstm_ae.get_layer(index=0).input],
+        outputs=[RP_conv2d_ae.get_layer('RP_reconstruction').output, classification, spatial_lstm_ae.get_layer('spatial_reconstruction').output])
     d_sae.summary()
     plot_model(d_sae, to_file='./results/dual_sae.png', show_shapes=True)
     d_sae.compile(loss=['mse', 'kld', 'mse'], loss_weights=[1, 3, 1], optimizer='adam',
@@ -132,18 +132,18 @@ def pretrain_RP(epochs=1000, batch_size=200):
         RP_conv_ae_ = load_model(cp_path)
     RP_conv_ae_.fit(x_train_RP, x_train_RP, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
 
-# def pretrain_lstm_ae(epochs=1000, batch_size=200):
-#     """
-#     pretrain is unsupervised, all data could use to train
-#     """
-#     print('pretrain_lstm_ae')
-#     cp_path = './results/spatial_lstm_ae_check_point.model'
-#     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
-#                          save_best_only=True, mode='min')
-#     spatial_lstm_ae_ = spatial_lstm_ae
-#     if exists(cp_path):
-#         spatial_lstm_ae_ = load_model(cp_path)
-#     spatial_lstm_ae_.fit(x_train_SF, x_train_SF, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
+def pretrain_lstm_ae(epochs=1000, batch_size=200):
+    """
+    pretrain is unsupervised, all data could use to train
+    """
+    print('pretrain_lstm_ae')
+    cp_path = './results/spatial_lstm_ae_check_point.model'
+    cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
+                         save_best_only=True, mode='min')
+    spatial_lstm_ae_ = spatial_lstm_ae
+    if exists(cp_path):
+        spatial_lstm_ae_ = load_model(cp_path)
+    spatial_lstm_ae_.fit(x_train_SF, x_train_SF, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
 
 def pretrain_spatial(epochs=1000, batch_size=200):
     """
@@ -166,7 +166,7 @@ def train_classifier(epochs=100, batch_size=200):
                          save_best_only=True, mode='max')
     early_stopping = EarlyStopping(monitor='val_lambda_1_loss', patience=100, verbose=2)
     RP_conv_ae = load_model('./results/RP_conv_ae_check_point.model')
-    spatial_conv1d_ae_ = load_model('./results/spatial_conv1d_ae_check_point.model')
+    spatial_conv1d_ae_ = load_model('./results/spatial_lstm_ae_check_point.model')
     hist = dual_sae.fit([x_train_RP, x_train_centroids, x_train_SF], [x_train_RP, y_train, x_train_SF],
                         epochs=epochs,
                         batch_size=batch_size, shuffle=True,
@@ -202,6 +202,9 @@ if __name__ == '__main__':
     x_train_RP, x_test_RP, x_train_SF, x_test_SF, x_train_centroids, \
     x_test_centroids, y_train, y_test = load_data()
 
+    x_train_SF = np.squeeze(x_train_SF)
+    x_test_SF = np.squeeze(x_test_SF)
+
     epochs = 30
     batch_size = 300
     """ note: each autoencoder has same embedding,
@@ -211,10 +214,11 @@ if __name__ == '__main__':
     each_embedding_dim = int(TOTAL_EMBEDDING_DIM / n_ae)
 
     RP_conv2d_ae = RP_Conv2D_AE()
-    # spatial_lstm_ae = spatial_LSTM_AE()
-    spatial_conv2d_ae = spatial_Conv2d_AE()
+    spatial_lstm_ae = spatial_LSTM_AE()
+    # spatial_conv2d_ae = spatial_Conv2d_AE()
     dual_sae = dual_SAE()
     pretrain_RP(100, batch_size)
-    pretrain_spatial(100, batch_size)
+    # pretrain_spatial(100, batch_size)
+    pretrain_lstm_ae(100, batch_size)
     train_classifier(5000, batch_size)
     show_confusion_matrix()
