@@ -1,11 +1,7 @@
-import math
-
 import numpy as np
 from geopy.distance import geodesic
-from scipy.interpolate import interp1d
-import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.utils import shuffle
 
 from params import MIN_N_POINTS, MAX_SEGMENT_SIZE, SCALE_SEGS_EACH_FEATURE, FILTER_SEGS
@@ -195,7 +191,7 @@ def calc_single_trj_features(trj, label):
 
     for trj_seg, d_seg, h_seg, hc_seg, v_seg, a_seg, hcr_seg, s_seg, tn_seg, hs_seg, dt_seg in \
             zip(trj_segs, d_segs, h_segs, hc_segs, v_segs, a_segs, hcr_segs, s_segs, tn_segs, hs_segs, dt_segs):
-        trjs_segments_filtered.append(trj_seg)
+        trjs_segments.append(trj_seg)
 
         # movement features seg
         m_features_seg = np.array(
@@ -203,7 +199,7 @@ def calc_single_trj_features(trj, label):
              zip(v_seg, a_seg, hcr_seg)]
         )
         m_features_seg = np.expand_dims(m_features_seg, axis=0)
-        m_features_segments_filtered.append(m_features_seg)
+        m_features_segments.append(m_features_seg)
 
         # spatial features seg
         s_features_seg = np.array(
@@ -212,9 +208,9 @@ def calc_single_trj_features(trj, label):
         )
         # ???? for time series, no need to expand dim
         s_features_seg = np.expand_dims(s_features_seg, axis=0)
-        s_features_segments_filtered.append(s_features_seg)
+        s_features_segments.append(s_features_seg)
 
-        segments_labels_filtered.append(label)
+        segments_labels.append(label)
 
 
 
@@ -255,8 +251,8 @@ def scale_segs(segs, scaler):
 
 
 if __name__ == '__main__':
-    trjs = np.load('./geolife/trjs.npy', allow_pickle=True)
-    labels = np.load('./geolife/labels.npy')
+    trjs = np.load('../geolife/trjs.npy', allow_pickle=True)
+    labels = np.load('../geolife/labels.npy')
     trjs, labels = shuffle(trjs, labels, random_state=0)  # !!!shuffle
 
     n_test = 1000
@@ -266,10 +262,10 @@ if __name__ == '__main__':
     n = len(trjs)
 
     # filtered data segments,  below 4 array has same element num
-    trjs_segments_filtered = []
-    m_features_segments_filtered = []  # movement features segs
-    s_features_segments_filtered = []  # spatial features segs
-    segments_labels_filtered = []
+    trjs_segments = []
+    m_features_segments = []  # movement features segs
+    s_features_segments = []  # spatial features segs
+    segments_labels = []
 
     N_TOTAL_POINTS = 0
     N_RESERVED_POINTS = 0
@@ -280,33 +276,33 @@ if __name__ == '__main__':
     print(N_TOTAL_POINTS)
     print('deleted points num percentile:{}'.format(1 - N_RESERVED_POINTS / N_TOTAL_POINTS))
 
-    trjs_segments_filtered = np.array(trjs_segments_filtered)
-    m_features_segments_filtered = np.array(m_features_segments_filtered)
-    s_features_segments_filtered = np.array(s_features_segments_filtered)
-    segments_labels_filtered = np.array(segments_labels_filtered)
+    trjs_segments = np.array(trjs_segments)
+    m_features_segments = np.array(m_features_segments)
+    s_features_segments = np.array(s_features_segments)
+    segments_labels = np.array(segments_labels)
 
     train_trjs_segments, test_trjs_segments, \
     train_mf_segments, test_mf_segments, \
     train_sf_segments, test_sf_segments, \
-    train_segments_labels, test_segments_labels = train_test_split(trjs_segments_filtered, m_features_segments_filtered,
-                                                                   s_features_segments_filtered, segments_labels_filtered,
+    train_segments_labels, test_segments_labels = train_test_split(trjs_segments, m_features_segments,
+                                                                   s_features_segments, segments_labels,
                                                                    test_size=0.20, random_state=7, shuffle=True)
 
-    scaler = MinMaxScaler()
+    scaler = StandardScaler()
     train_sf_segments = scale_segs(train_sf_segments, scaler)
     test_sf_segments = scale_segs(test_sf_segments, scaler)
 
     if SCALE_SEGS_EACH_FEATURE:
         train_mf_segments, test_mf_segments = scale_segs(train_mf_segments), scale_segs(test_mf_segments)
 
-    np.save('./geolife/train_trjs_segments.npy', train_trjs_segments)
-    np.save('./geolife/test_trjs_segments.npy', test_trjs_segments)
+    np.save('../geolife/train_trjs_segments.npy', train_trjs_segments)
+    np.save('../geolife/test_trjs_segments.npy', test_trjs_segments)
 
-    np.save('./geolife/train_mf_segments.npy', train_mf_segments)
-    np.save('./geolife/test_mf_segments.npy', test_mf_segments)
+    np.save('../geolife/train_mf_segments.npy', train_mf_segments)
+    np.save('../geolife/test_mf_segments.npy', test_mf_segments)
 
-    np.save('./geolife/train_sf_segments.npy', train_sf_segments)
-    np.save('./geolife/test_sf_segments.npy', test_sf_segments)
+    np.save('../geolife/train_sf_segments.npy', train_sf_segments)
+    np.save('../geolife/test_sf_segments.npy', test_sf_segments)
 
-    np.save('./geolife/train_segments_labels.npy', train_segments_labels)
-    np.save('./geolife/test_segments_labels.npy', test_segments_labels)
+    np.save('../geolife/train_segments_labels.npy', train_segments_labels)
+    np.save('../geolife/test_segments_labels.npy', test_segments_labels)

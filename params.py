@@ -1,4 +1,4 @@
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
 
 from trajectory_extraction import modes_to_use
 
@@ -12,10 +12,10 @@ MIN_N_POINTS = 10
 DIM = 8  # Embedding dimension
 TAU = 8  # Embedding delay
 
-SCALER = StandardScaler()
+SCALER = MinMaxScaler()
 
-RP_MAT_SCALE_EACH_FEATURE = True
-RP_MAT_SCALE_ALL = True
+RP_MAT_SCALE_EACH_FEATURE = False
+RP_MAT_SCALE_ALL = False
 
 SCALE_SEGS_EACH_FEATURE = False
 

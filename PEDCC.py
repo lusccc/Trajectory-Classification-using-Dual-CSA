@@ -1,7 +1,7 @@
 import numpy as np
 
 from params import TOTAL_EMBEDDING_DIM, N_CLASS
-from utils import scale_1d_data
+from utils import scale_any_shape_data
 
 '''
 https://github.com/anlongstory/CSAE
@@ -63,25 +63,20 @@ def repeat(c, n, scale=True):
     """
     cs = np.array([c for i in range(n)])  # !!!!full of same element
     if scale:
-        cs = scale_1d_data(cs)
+        cs = scale_any_shape_data(cs)
     return cs
 
 
 if __name__ == '__main__':
-    x_train_RP = np.load('./geolife/train_mf_RP_mats.npy')
-    x_test_RP = np.load('./geolife/test_mf_RP_mats.npy')
-
-    n_train = x_train_RP.shape[0]
-    n_test = x_test_RP.shape[0]
-
     c = generate_center(u, v, G)
+    RP_mats_mf_filtered = np.load('./geolife_features/RP_mats_clean_mf.npy')
+
+    n_samples = RP_mats_mf_filtered.shape[0]
 
     # !!those data are generated, no real trajectory data involved!!
     scale = True
-    c_train = repeat(c, n_train, scale)
-    c_test = repeat(c, n_test, scale)
-    np.save('./geolife/train_centroids.npy', c_train)
-    np.save('./geolife/test_centroids.npy', c_test)
+    centroids = repeat(c, n_samples, scale)
+    np.save('./geolife_features/centroids.npy', centroids)
 
 
 

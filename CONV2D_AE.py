@@ -6,7 +6,7 @@ from keras.utils import plot_model, to_categorical
 from keras import backend as K, Sequential
 
 
-def Conv2D_AE(input_shape, embedding_dim, n_features, name):
+def CONV2D_AE(input_shape, embedding_dim, n_features, name):
     size = input_shape[1]  # mat size
     print('input_shape:', input_shape)
     activ = 'relu'

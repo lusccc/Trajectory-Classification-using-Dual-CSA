@@ -4,20 +4,18 @@ from sklearn.metrics import confusion_matrix, classification_report
 import matplotlib.pyplot as plt
 
 import numpy as np
-from keras import backend as K, Sequential
+from keras import backend as K
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint
 from keras.engine.saving import load_model
-from keras.layers import Conv2D, Flatten, MaxPooling2D, Reshape, UpSampling2D, Conv2DTranspose, Lambda, \
-    BatchNormalization, Activation, concatenate
-from keras.layers import Input, Dense
+from keras.layers import Lambda
+from keras.layers import Input
 from keras.metrics import categorical_accuracy
 from keras.models import Model
 from keras.utils import plot_model, to_categorical
-from sklearn.model_selection import train_test_split
 
 import os
 
-from Conv2D_AE import Conv2D_AE, CAE
+from CONV2D_AE import CONV2D_AE
 from params import N_CLASS, TOTAL_EMBEDDING_DIM
 from trajectory_extraction import modes_to_use
 
@@ -65,7 +63,7 @@ def RP_CAE():
     """ -----RP_conv_ae------"""
     RP_mat_size = x_train_RP.shape[1]  # 40
     n_RP_features = x_train_RP.shape[3]
-    RP_conv_ae = Conv2D_AE((RP_mat_size, RP_mat_size, n_RP_features), each_embedding_dim, n_RP_features, 'RP')
+    RP_conv_ae = CONV2D_AE((RP_mat_size, RP_mat_size, n_RP_features), each_embedding_dim, n_RP_features, 'RP')
     # RP_conv_ae = CAE(each_embedding_dim, n_RP_features, 'RP', (RP_mat_size, RP_mat_size, n_RP_features))
     RP_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
     return RP_conv_ae

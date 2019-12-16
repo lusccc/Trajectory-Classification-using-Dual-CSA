@@ -3,16 +3,12 @@ from math import cos, pi
 import numpy as np
 from numpy.linalg import norm
 from pyts.image.recurrence import _trajectories
-from scipy.spatial.distance import pdist, squareform
 
 #  Settings for the embedding
-from sklearn.preprocessing import StandardScaler
 
-from params import DIM, TAU, RP_MAT_SCALE_EACH_FEATURE, RP_MAT_SCALE_ALL
+from params import DIM, TAU
+from trajectory_segmentation_and_features import movement_features
 from utils import scale_any_shape_data
-from multiprocessing import Process, Lock
-
-
 
 # Distance metric in phase space ->
 # Possible choices ("manhattan","euclidean","supremum")
@@ -42,7 +38,7 @@ def gen_multiple_RP_mats(series, scale=False):
     mycode = False
     if mycode:
         ## my code to calc distances
-        RP_mats = [] # !!skipped Heavside function
+        RP_mats = []  # !!skipped Heavside function
         count = 0
         for distance_mat, phase_vectors in zip(distance_mats, phase_vectorss):
             print('{}/{}'.format(count, n_series))
@@ -68,7 +64,7 @@ def gen_multiple_RP_mats(series, scale=False):
 
         RP_mats = np.array(RP_mats)
     else:
-        RP_mats = distance_mats# !!skipped Heavside function
+        RP_mats = distance_mats  # !!skipped Heavside function
     if scale:
         RP_mats = scale_any_shape_data(RP_mats)
     return RP_mats
@@ -90,31 +86,24 @@ def sign(m, n):
 
 if __name__ == '__main__':
 
-    scale_each_feature = RP_MAT_SCALE_EACH_FEATURE
-    scale_all = RP_MAT_SCALE_ALL
 
-    data_type = {'train', 'test'}
+    labels = np.load('./geolife_features/trjs_segs_features_labels.npy')
+
+    data_type = ['clean', 'noise']
 
     for type in data_type:
         print('++++++++data type:', type)
-        features_segments = np.load('./geolife/{}_mf_segments.npy'.format(type))
-        features_segments_labels = np.load('./geolife/{}_segments_labels.npy'.format(type))
-        for i in range(features_segments.shape[3]):
-            f = features_segments[:, :, :, i]
-            max = np.max(f)
-            min = np.min(f)
-            print('features value range:', min, max)
-
-        # (106026, 1, 48, 3) (106026,)
-        print(features_segments.shape, features_segments_labels.shape)
+        # only use movement features to generate RP mat
+        trjs_segs_features = np.load('./geolife_features/trjs_segs_{}_features.npy'.format(type))[:, :, :,
+                             movement_features]
 
         features_RP_mats = []
-        n_features = features_segments.shape[3]
-        features_segments = np.squeeze(features_segments)
+        n_features = trjs_segs_features.shape[3]
+        trjs_segs_features = np.squeeze(trjs_segs_features)
         for i in range(n_features):
-            single_feature_segs = features_segments[:, :, i]  # (n, 48)
+            single_feature_segs = trjs_segs_features[:, :, i]  # (n, 48)
             # generate RP mat for each seg
-            feature_RP_mats = gen_multiple_RP_mats(single_feature_segs[:], scale=scale_each_feature)
+            feature_RP_mats = gen_multiple_RP_mats(single_feature_segs[:], scale=False)
             feature_RP_mats = np.expand_dims(feature_RP_mats, axis=3)
             features_RP_mats.append(feature_RP_mats)
             max = np.max(feature_RP_mats)
@@ -122,7 +111,5 @@ if __name__ == '__main__':
             print('RP mat value range:', min, max)
         features_RP_mats = np.concatenate(features_RP_mats, axis=3)
 
-        if scale_all:
-            features_RP_mats = scale_any_shape_data(features_RP_mats)
-        print(' ##\nfeatures_RP_mats.shape:{}'.format(features_RP_mats.shape))
-        np.save('./geolife/{}_mf_RP_mats.npy'.format(type), features_RP_mats)
+        print(' ####\nfeatures_RP_mats.shape:{}'.format(features_RP_mats.shape))
+        np.save('./geolife_features/RP_mats_{}_mf.npy'.format(type), features_RP_mats)

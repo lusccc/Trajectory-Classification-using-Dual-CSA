@@ -6,7 +6,10 @@ from keras.utils import plot_model, to_categorical
 from keras import backend as K, Sequential
 
 
-def TS_Conv2D_AE(input_shape, embedding_dim, n_features, name):
+def TS_CONV2D_AE(input_shape, embedding_dim, n_features, name):
+    """
+    time series conv2d ae
+    """
     size = input_shape[1]  # series size
     print('input_shape:', input_shape)
     activ = 'relu'

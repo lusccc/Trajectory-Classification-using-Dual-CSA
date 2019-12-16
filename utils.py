@@ -8,7 +8,7 @@ import numpy as np
 from params import SCALER, MAX_SEGMENT_SIZE, MIN_N_POINTS
 
 
-def scale_1d_data(data, scaler=SCALER):
+def scale_any_shape_data(data, scaler=SCALER):
 
     data = np.array(data)
     shape_ = data.shape
