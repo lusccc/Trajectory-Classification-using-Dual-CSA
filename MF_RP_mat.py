@@ -6,8 +6,7 @@ from pyts.image.recurrence import _trajectories
 
 #  Settings for the embedding
 
-from params import DIM, TAU
-from trajectory_segmentation_and_features import movement_features
+from params import DIM, TAU, movement_features
 from utils import scale_any_shape_data
 
 # Distance metric in phase space ->
@@ -32,7 +31,7 @@ def gen_multiple_RP_mats(series, scale=False):
     # from source code in pyts.image.recurrence.RecurrencePlot.transform
     distance_mats = np.sqrt(
         np.sum((phase_vectorss[:, None, :, :] - phase_vectorss[:, :, None, :]) ** 2,
-               axis=3)
+               axis=3, dtype='float32')
     )
 
     mycode = False

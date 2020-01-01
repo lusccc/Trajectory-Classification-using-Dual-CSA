@@ -7,6 +7,8 @@ from time_utils import timestamp_to_hour
 from trajectory_extraction import MODE_NAMES
 from utils import segment_single_series, check_lat_lng, calc_initial_compass_bearing, interp_single_series
 
+# walk, bike, bus, driving, //or train/subway
+# [0, 1, 2, 3, 4]
 
 SPEED_LIMIT = {0: 7, 1: 12, 2: 120. / 3.6, 3: 180. / 3.6, 4: 120 / 3.6, 5: 120 / 3.6}
 # acceleration
@@ -16,11 +18,6 @@ HCR_LIMIT = {0: 30, 1: 50, 2: 60, 3: 90, 4: 20}
 STOP_DISTANCE_LIMIT = 2  # meters
 STOP_VELOCITY_LIMIT = 2
 STRAIGHT_MOVING_DEGREE_LIMIT = 30  # abs value, less than this limit mean still straight
-
-# 0        1     2  3  4  5  6   7    8  9
-# delta_t, hour, d, v, a, h, hc, hcr, s, tn
-movement_features = [3, 4, 7, 8, 9]
-other_features = [ 3, 4, 7, 8, 9]
 
 
 def segment_trjs(trjs, labels):
@@ -259,9 +256,9 @@ if __name__ == '__main__':
     labels = np.load('./geolife/labels.npy')
     trjs, labels = shuffle(trjs, labels, random_state=0)  # !!!shuffle
 
-    n_test = 1000
-    trjs = trjs[:n_test]
-    labels = labels[:n_test]
+    # n_test = 1000
+    # trjs = trjs[:n_test]
+    # labels = labels[:n_test]
 
     fill_series_function = interp_single_series
 

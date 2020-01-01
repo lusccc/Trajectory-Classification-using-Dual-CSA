@@ -3,8 +3,7 @@ from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-from params import N_CLASS
-from trajectory_segmentation_and_features import other_features
+from params import N_CLASS, other_features
 from utils import scale_any_shape_data
 
 

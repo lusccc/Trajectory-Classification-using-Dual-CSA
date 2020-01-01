@@ -12,20 +12,20 @@ from keras.layers import Lambda, \
 from keras.layers import Input
 from keras.metrics import categorical_accuracy
 from keras.models import Model
-from keras.utils import plot_model
+from keras.utils import plot_model, multi_gpu_model
 
 import os
 
 from CONV2D_AE import CONV2D_AE
 from dataset import load_data
-from params import N_CLASS, TOTAL_EMBEDDING_DIM
+from params import N_CLASS, TOTAL_EMBEDDING_DIM, MULTI_GPU
 from TS_CONV2D_AE import TS_CONV2D_AE
 from trajectory_extraction import modes_to_use
 from trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 
 from dataset import *
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 
 def student_t(z, u, alpha=1.):
@@ -53,6 +53,8 @@ def RP_Conv2D_AE():
     RP_mat_size = x_RP_clean_mf_train.shape[1]  # 40
     n_features = x_RP_clean_mf_train.shape[3]
     RP_conv_ae = CONV2D_AE((RP_mat_size, RP_mat_size, n_features), each_embedding_dim, n_features, 'RP')
+    if MULTI_GPU:
+        RP_conv_ae = multi_gpu_model(RP_conv_ae, gpus=2)
     RP_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
     return RP_conv_ae
 
@@ -60,6 +62,8 @@ def RP_Conv2D_AE():
 def ts_Conv2d_AE():
     n_features = x_trj_seg_clean_of_train .shape[3]
     ts_conv1d_ae = TS_CONV2D_AE((1, MAX_SEGMENT_SIZE, n_features), each_embedding_dim, n_features, 'spatial')
+    if MULTI_GPU:
+        ts_conv1d_ae = multi_gpu_model(ts_conv1d_ae, gpus=2)
     ts_conv1d_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
     return ts_conv1d_ae
 
@@ -77,6 +81,8 @@ def dual_SAE():
                  ts_conv2d_ae.get_layer('spatial_reconstruction').output])
     d_sae.summary()
     plot_model(d_sae, to_file='./results/dual_sae.png', show_shapes=True)
+    if MULTI_GPU:
+        d_sae = multi_gpu_model(d_sae, gpus=2)
     d_sae.compile(loss=['mse', 'kld', 'mse'], loss_weights=[1, 3, 1], optimizer='adam',
                   metrics=['accuracy', categorical_accuracy, 'accuracy'])
     return d_sae
@@ -138,7 +144,7 @@ def train_classifier(epochs=100, batch_size=200):
                         validation_data=(
                             [x_RP_clean_mf_test, x_centroids_test, x_trj_seg_clean_of_test],
                             [x_RP_clean_mf_test, y_test, x_trj_seg_clean_of_test]),
-                        callbacks=[early_stopping, tb, cp]
+                        callbacks=[ tb, cp]
                         )
     #
     score = np.argmax(hist.history['val_lambda_1_acc'])
@@ -160,7 +166,7 @@ def show_confusion_matrix():
     ax.set_ylabel('true')  # y轴
     plt.show()
 
-    re = classification_report(y_true, y_pred, target_names=['walk', 'bike', 'bus', 'driving', 'train/subway'])
+    re = classification_report(y_true, y_pred, target_names=['walk', 'bike', 'bus', 'driving', 'train/subway'], digits=5)
     print(re)
 
 
@@ -178,7 +184,7 @@ if __name__ == '__main__':
     RP_conv2d_ae = RP_Conv2D_AE()
     ts_conv2d_ae = ts_Conv2d_AE()
     dual_sae = dual_SAE()
-    pretrain_RP(100, batch_size)
-    pretrain_ts(100, batch_size)
-    train_classifier(5000, batch_size)
+    pretrain_RP(1000, batch_size)
+    pretrain_ts(5000, batch_size)
+    train_classifier(3000, batch_size)
     show_confusion_matrix()
