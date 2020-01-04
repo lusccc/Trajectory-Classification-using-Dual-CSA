@@ -8,7 +8,7 @@ from keras import backend as K
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint
 from keras.engine.saving import load_model
 from keras.layers import Lambda, \
-    concatenate
+    concatenate, Dense
 from keras.layers import Input
 from keras.metrics import categorical_accuracy
 from keras.models import Model
@@ -25,27 +25,8 @@ from trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 
 from dataset import *
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-
-def student_t(z, u, alpha=1.):
-    """
-student t-distribution, as same as used in t-SNE algorithm.
-                 q_ij = 1/(1+dist(x_i, u_j)^2), then normalize it.
-    :param z: shape=(n_samples, n_embedding)
-    :param u: ground_truth_centroids
-    :param alpha:
-    :return:student's t-distribution, or soft labels for each sample. shape=(n_samples, n_class)
-    """
-    q = 1.0 / (1.0 + (K.sum(K.square(K.expand_dims(z, axis=1) - u), axis=2) / alpha))
-    q **= (alpha + 1.0) / 2.0
-    q = K.transpose(K.transpose(q) / K.sum(q, axis=1))
-    return q
-
-
-# input: embedding, ground_truth_centroids
-# output: predicted q distribution, shape=(n_samples, n_class)
-classification_layer = Lambda(lambda x: student_t(x[0], x[1]), output_shape=lambda x: (x[0][0], N_CLASS))
 
 
 def RP_Conv2D_AE():
@@ -68,22 +49,20 @@ def ts_Conv2d_AE():
     return ts_conv1d_ae
 
 
-def dual_SAE():
-    """--------SAE----------"""
+def dual_Softmax_AE():
     concat_embedding = concatenate([RP_conv2d_ae.get_layer('RP_embedding').output,
                                     ts_conv2d_ae.get_layer('spatial_embedding').output])
-    centroids_input = Input((N_CLASS, TOTAL_EMBEDDING_DIM))
-    classification = classification_layer([concat_embedding, centroids_input])
+    softmax_classifier = Dense(N_CLASS, activation='softmax')(concat_embedding)
 
     d_sae = Model(
-        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv2d_ae.get_layer(index=0).input],
-        outputs=[RP_conv2d_ae.get_layer('RP_reconstruction').output, classification,
+        inputs=[RP_conv2d_ae.get_layer(index=0).input, ts_conv2d_ae.get_layer(index=0).input],
+        outputs=[RP_conv2d_ae.get_layer('RP_reconstruction').output, softmax_classifier,
                  ts_conv2d_ae.get_layer('spatial_reconstruction').output])
     d_sae.summary()
-    plot_model(d_sae, to_file='./results/dual_sae.png', show_shapes=True)
+    plot_model(d_sae, to_file='./comparison_results/dual_sae.png', show_shapes=True)
     if MULTI_GPU:
         d_sae = multi_gpu_model(d_sae, gpus=2)
-    d_sae.compile(loss=['mse', 'kld', 'mse'], loss_weights=loss_weights, optimizer='adam',
+    d_sae.compile(loss=['mse', 'categorical_crossentropy', 'mse'], loss_weights=loss_weights, optimizer='adam',
                   metrics=['accuracy', categorical_accuracy, 'accuracy'])
     return d_sae
 
@@ -105,7 +84,7 @@ def pretrain_RP(epochs=1000, batch_size=200):
     pretrain is unsupervised, all data could use to train
     """
     print('pretrain_RP')
-    cp_path = './results/RP_conv_ae_check_point.model'
+    cp_path = './comparison_results/RP_conv_ae_check_point.model'
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
     RP_conv_ae_ = RP_conv2d_ae
@@ -119,7 +98,7 @@ def pretrain_ts(epochs=1000, batch_size=200):
     pretrain is unsupervised, all data could use to train
     """
     print('pretrain_ts')
-    cp_path = './results/ts_conv_ae_check_point.model'
+    cp_path = './comparison_results/ts_conv_ae_check_point.model'
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
     ts_conv1d_ae_ = ts_conv2d_ae
@@ -131,30 +110,30 @@ def pretrain_ts(epochs=1000, batch_size=200):
 
 def train_classifier(epochs=100, batch_size=200):
     print('train_classifier...')
-    cp = ModelCheckpoint('./results/sae_check_point.model', monitor='val_lambda_1_acc',
+    cp = ModelCheckpoint('./comparison_results/sae_check_point.model', monitor='val_dense_3_acc',
                          verbose=1,
                          save_best_only=True, mode='max')
-    early_stopping = EarlyStopping(monitor='val_lambda_1_loss', patience=patience, verbose=2)
-    RP_conv_ae = load_model('./results/RP_conv_ae_check_point.model')
-    spatial_conv1d_ae_ = load_model('./results/ts_conv_ae_check_point.model')
-    hist = dual_sae.fit([x_RP_clean_mf_train, x_centroids_train, x_trj_seg_clean_of_train],
+    early_stopping = EarlyStopping(monitor='val_dense_3_loss', patience=patience, verbose=2)
+    RP_conv_ae = load_model('./comparison_results/RP_conv_ae_check_point.model')
+    spatial_conv1d_ae_ = load_model('./comparison_results/ts_conv_ae_check_point.model')
+    hist = dual_sae.fit([x_RP_clean_mf_train, x_trj_seg_clean_of_train],
                         [x_RP_clean_mf_train, y_train, x_trj_seg_clean_of_train],
                         epochs=epochs,
                         batch_size=batch_size, shuffle=True,
                         validation_data=(
-                            [x_RP_clean_mf_test, x_centroids_test, x_trj_seg_clean_of_test],
+                            [x_RP_clean_mf_test, x_trj_seg_clean_of_test],
                             [x_RP_clean_mf_test, y_test, x_trj_seg_clean_of_test]),
                         callbacks=[early_stopping, tb, cp]
                         )
     #
-    score = np.argmax(hist.history['val_lambda_1_acc'])
+    score = np.argmax(hist.history['val_dense_3_acc'])
     print('the optimal epoch size: {}, the value of high accuracy {}'.format(hist.epoch[score],
-                                                                             np.max(hist.history['val_lambda_1_acc'])))
+                                                                             np.max(hist.history['val_dense_3_acc'])))
 
 
 def show_confusion_matrix():
-    sae = load_model('./results/sae_check_point.model', custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
-    pred = sae.predict([x_RP_clean_mf_test, x_centroids_test, x_trj_seg_clean_of_test])
+    sae = load_model('./comparison_results/sae_check_point.model', custom_objects={'N_CLASS': N_CLASS})
+    pred = sae.predict([x_RP_clean_mf_test, x_trj_seg_clean_of_test])
     y_pred = np.argmax(pred[1], axis=1)
     y_true = np.argmax(y_test, axis=1)
     cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)
@@ -184,8 +163,8 @@ if __name__ == '__main__':
 
     RP_conv2d_ae = RP_Conv2D_AE()
     ts_conv2d_ae = ts_Conv2d_AE()
-    dual_sae = dual_SAE()
-    pretrain_RP(100, batch_size)
-    pretrain_ts(350, batch_size)
-    train_classifier(3000, batch_size)
+    dual_sae = dual_Softmax_AE()
+    # pretrain_RP(100, batch_size)
+    # pretrain_ts(350, batch_size)
+    # train_classifier(3000, batch_size)
     show_confusion_matrix()
