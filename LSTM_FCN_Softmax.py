@@ -16,8 +16,10 @@ from params import N_CLASS, movement_features, MAX_SEGMENT_SIZE, TOTAL_EMBEDDING
 from dataset import *
 from trajectory_extraction import modes_to_use
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
-def LSTM_FCN(timesteps, embedding_dim, n_features):
+
+def LSTM_FCN_Softmax(timesteps, embedding_dim, n_features, n_class):
 
     ip = Input(shape=(timesteps, n_features))
 
@@ -41,13 +43,13 @@ def LSTM_FCN(timesteps, embedding_dim, n_features):
 
     x = concatenate([x, y])
 
-    out = Dense(N_CLASS, activation='softmax')(x)
+    out = Dense(n_class, activation='softmax')(x)
 
     model = Model(ip, out)
 
     model.summary()
 
-    plot_model(model, to_file='./comparison_results/lstm_fcn.png', show_shapes=True)
+    plot_model(model, to_file='./comparison_results/lstm_fcn_softmax.png', show_shapes=True)
 
     learning_rate = 1e-3
 
@@ -60,7 +62,7 @@ def LSTM_FCN(timesteps, embedding_dim, n_features):
 
 def train(epochs=100, batch_size=200):
     factor = 1. / np.cbrt(2)
-    model_checkpoint = ModelCheckpoint("./comparison_results/lstm_fcn.model", verbose=1,
+    model_checkpoint = ModelCheckpoint("./comparison_results/lstm_fcn_sofrmax.model", verbose=1,
                                        monitor='val_acc', save_best_only=True, mode='max')
     reduce_lr = ReduceLROnPlateau(monitor='loss', patience=100, mode='auto',
                                   factor=factor, cooldown=0, min_lr=1e-4, verbose=2)
@@ -73,12 +75,12 @@ def train(epochs=100, batch_size=200):
                             [np.squeeze(x_trj_seg_clean_of_test)],
                             [y_test]),
                         callbacks=callback_list)
-    score = np.argmax(hist.history['val_lambda_1_acc'])
+    score = np.argmax(hist.history['val_acc'])
     print('the optimal epoch size: {}, the value of high accuracy {}'.format(hist.epoch[score],
-                                                                             np.max(hist.history['val_lambda_1_acc'])))
+                                                                             np.max(hist.history['val_acc'])))
 
 def show_confusion_matrix():
-    model = load_model('./comparison_results/lstm_fcn.model', custom_objects={'N_CLASS': N_CLASS})
+    model = load_model('./comparison_results/lstm_fcn_sofrmax.model', custom_objects={'N_CLASS': N_CLASS})
     pred = model.predict([np.squeeze(x_trj_seg_clean_of_test)])
     y_pred = np.argmax(pred, axis=1)
     y_true = np.argmax(y_test, axis=1)
@@ -91,7 +93,7 @@ def show_confusion_matrix():
 
 if __name__ == "__main__":
 
-    model = LSTM_FCN(MAX_SEGMENT_SIZE, TOTAL_EMBEDDING_DIM/2, len(movement_features))
+    model = LSTM_FCN_Softmax(MAX_SEGMENT_SIZE, TOTAL_EMBEDDING_DIM / 2, len(movement_features), N_CLASS)
     patience = 35
-    # train(3000)
+    train(3000)
     show_confusion_matrix()

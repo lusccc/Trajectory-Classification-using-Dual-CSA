@@ -3,7 +3,7 @@ from sklearn.preprocessing import MinMaxScaler
 from trajectory_extraction import modes_to_use
 
 # if multiple autoencoder exist, say n, each embedding dim will be TOTAL_EMBEDDING_DIM/n
-TOTAL_EMBEDDING_DIM = 112
+TOTAL_EMBEDDING_DIM = 98
 N_CLASS = len(modes_to_use)
 
 MAX_SEGMENT_SIZE = 184
