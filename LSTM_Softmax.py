@@ -30,7 +30,7 @@ def LSTM_Softmax(timesteps, embedding_dim, n_features, n_class):
 
 def train(epochs=100, batch_size=200):
     factor = 1. / np.cbrt(2)
-    model_checkpoint = ModelCheckpoint("./comparison_results/lstm_fcn.model", verbose=1,
+    model_checkpoint = ModelCheckpoint("./comparison_results/lstm_softmax.model", verbose=1,
                                        monitor='val_acc', save_best_only=True, mode='max')
     reduce_lr = ReduceLROnPlateau(monitor='loss', patience=100, mode='auto',
                                   factor=factor, cooldown=0, min_lr=1e-4, verbose=2)
@@ -61,7 +61,7 @@ def show_confusion_matrix():
 
 
 if __name__ == "__main__":
-    model = LSTM_Softmax(MAX_SEGMENT_SIZE, TOTAL_EMBEDDING_DIM / 2, len(movement_features), N_CLASS)
+    model = LSTM_Softmax(MAX_SEGMENT_SIZE, 32, len(movement_features), N_CLASS)
     patience = 35
     train(3000)
     show_confusion_matrix()

@@ -93,7 +93,7 @@ def show_confusion_matrix():
 
 if __name__ == "__main__":
 
-    model = LSTM_FCN_Softmax(MAX_SEGMENT_SIZE, TOTAL_EMBEDDING_DIM / 2, len(movement_features), N_CLASS)
+    model = LSTM_FCN_Softmax(MAX_SEGMENT_SIZE, 32, len(movement_features), N_CLASS)
     patience = 35
     train(3000)
     show_confusion_matrix()

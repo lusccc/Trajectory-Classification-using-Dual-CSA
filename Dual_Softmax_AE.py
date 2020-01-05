@@ -25,7 +25,7 @@ from trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 
 from dataset import *
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 
@@ -164,7 +164,7 @@ if __name__ == '__main__':
     RP_conv2d_ae = RP_Conv2D_AE()
     ts_conv2d_ae = ts_Conv2d_AE()
     dual_sae = dual_Softmax_AE()
-    # pretrain_RP(100, batch_size)
-    # pretrain_ts(350, batch_size)
-    # train_classifier(3000, batch_size)
+    pretrain_RP(100, batch_size)
+    pretrain_ts(350, batch_size)
+    train_classifier(3000, batch_size)
     show_confusion_matrix()
