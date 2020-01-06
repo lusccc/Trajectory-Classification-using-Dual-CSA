@@ -1,6 +1,6 @@
-from sklearn.model_selection import StratifiedKFold, cross_validate
-from sklearn.ensemble import RandomForestClassifier
 import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import StratifiedKFold, cross_validate
 
 n_samples = 100
 

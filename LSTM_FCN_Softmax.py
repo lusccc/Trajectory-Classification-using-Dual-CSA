@@ -1,19 +1,16 @@
 import os
 
-from keras import backend as K
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 from keras.engine.saving import load_model
-from keras.layers import Conv1D, BatchNormalization, GlobalAveragePooling1D, Permute, Dropout, Flatten
-from keras.layers import Input, Dense, LSTM, CuDNNLSTM, concatenate, Activation, GRU, SimpleRNN
+from keras.layers import Conv1D, BatchNormalization, GlobalAveragePooling1D, Permute, Dropout
+from keras.layers import Input, Dense, LSTM, concatenate, Activation
 from keras.models import Model
-import numpy as np
 from keras.optimizers import Adam
 from keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, classification_report
 
-from params import N_CLASS, movement_features, MAX_SEGMENT_SIZE, TOTAL_EMBEDDING_DIM
-
 from dataset import *
+from params import features_set_1, MAX_SEGMENT_SIZE
 from trajectory_extraction import modes_to_use
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
@@ -69,19 +66,19 @@ def train(epochs=100, batch_size=200):
     early_stopping = EarlyStopping(monitor='val_loss', patience=patience, verbose=2)
     callback_list = [model_checkpoint, reduce_lr, early_stopping]
 
-    hist = model.fit(np.squeeze(x_trj_seg_clean_of_train), y_train, epochs=epochs,
-                        batch_size=batch_size, shuffle=True,
-                        validation_data=(
-                            [np.squeeze(x_trj_seg_clean_of_test)],
+    hist = model.fit(np.squeeze(x_features_series_clean_train), y_train, epochs=epochs,
+                     batch_size=batch_size, shuffle=True,
+                     validation_data=(
+                            [np.squeeze(x_features_series_clean_test)],
                             [y_test]),
-                        callbacks=callback_list)
+                     callbacks=callback_list)
     score = np.argmax(hist.history['val_acc'])
     print('the optimal epoch size: {}, the value of high accuracy {}'.format(hist.epoch[score],
                                                                              np.max(hist.history['val_acc'])))
 
 def show_confusion_matrix():
     model = load_model('./comparison_results/lstm_fcn_sofrmax.model', custom_objects={'N_CLASS': N_CLASS})
-    pred = model.predict([np.squeeze(x_trj_seg_clean_of_test)])
+    pred = model.predict([np.squeeze(x_features_series_clean_test)])
     y_pred = np.argmax(pred, axis=1)
     y_true = np.argmax(y_test, axis=1)
     cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)
@@ -93,7 +90,7 @@ def show_confusion_matrix():
 
 if __name__ == "__main__":
 
-    model = LSTM_FCN_Softmax(MAX_SEGMENT_SIZE, 32, len(movement_features), N_CLASS)
+    model = LSTM_FCN_Softmax(MAX_SEGMENT_SIZE, 32, len(features_set_1), N_CLASS)
     patience = 35
     train(3000)
     show_confusion_matrix()

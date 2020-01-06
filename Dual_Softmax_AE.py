@@ -1,29 +1,22 @@
+import os
 from os.path import exists
-import seaborn as sns
-from sklearn.metrics import confusion_matrix, classification_report
-import matplotlib.pyplot as plt
 
-import numpy as np
-from keras import backend as K
+import matplotlib.pyplot as plt
+import seaborn as sns
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint
 from keras.engine.saving import load_model
-from keras.layers import Lambda, \
-    concatenate, Dense
-from keras.layers import Input
+from keras.layers import concatenate, Dense
 from keras.metrics import categorical_accuracy
 from keras.models import Model
 from keras.utils import plot_model, multi_gpu_model
-
-import os
+from sklearn.metrics import confusion_matrix, classification_report
 
 from CONV2D_AE import CONV2D_AE
-from dataset import load_data
-from params import N_CLASS, TOTAL_EMBEDDING_DIM, MULTI_GPU
 from TS_CONV2D_AE import TS_CONV2D_AE
-from trajectory_extraction import modes_to_use
-from trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
-
 from dataset import *
+from params import TOTAL_EMBEDDING_DIM, MULTI_GPU
+from trajectory_extraction import modes_to_use
+from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
@@ -31,8 +24,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def RP_Conv2D_AE():
     """ -----RP_conv_ae------"""
-    RP_mat_size = x_RP_clean_mf_train.shape[1]  # 40
-    n_features = x_RP_clean_mf_train.shape[3]
+    RP_mat_size = x_RP_clean_train.shape[1]  # 40
+    n_features = x_RP_clean_train.shape[3]
     RP_conv_ae = CONV2D_AE((RP_mat_size, RP_mat_size, n_features), each_embedding_dim, n_features, 'RP')
     if MULTI_GPU:
         RP_conv_ae = multi_gpu_model(RP_conv_ae, gpus=2)
@@ -41,8 +34,8 @@ def RP_Conv2D_AE():
 
 
 def ts_Conv2d_AE():
-    n_features = x_trj_seg_clean_of_train.shape[3]
-    ts_conv1d_ae = TS_CONV2D_AE((1, MAX_SEGMENT_SIZE, n_features), each_embedding_dim, n_features, 'spatial')
+    n_features = x_features_series_clean_train.shape[3]
+    ts_conv1d_ae = TS_CONV2D_AE((1, MAX_SEGMENT_SIZE, n_features), each_embedding_dim, n_features, 'ts')
     if MULTI_GPU:
         ts_conv1d_ae = multi_gpu_model(ts_conv1d_ae, gpus=2)
     ts_conv1d_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
@@ -51,13 +44,13 @@ def ts_Conv2d_AE():
 
 def dual_Softmax_AE():
     concat_embedding = concatenate([RP_conv2d_ae.get_layer('RP_embedding').output,
-                                    ts_conv2d_ae.get_layer('spatial_embedding').output])
+                                    ts_conv2d_ae.get_layer('ts_embedding').output])
     softmax_classifier = Dense(N_CLASS, activation='softmax')(concat_embedding)
 
     d_sae = Model(
         inputs=[RP_conv2d_ae.get_layer(index=0).input, ts_conv2d_ae.get_layer(index=0).input],
         outputs=[RP_conv2d_ae.get_layer('RP_reconstruction').output, softmax_classifier,
-                 ts_conv2d_ae.get_layer('spatial_reconstruction').output])
+                 ts_conv2d_ae.get_layer('ts_reconstruction').output])
     d_sae.summary()
     plot_model(d_sae, to_file='./comparison_results/dual_sae.png', show_shapes=True)
     if MULTI_GPU:
@@ -90,7 +83,7 @@ def pretrain_RP(epochs=1000, batch_size=200):
     RP_conv_ae_ = RP_conv2d_ae
     if exists(cp_path):
         RP_conv_ae_ = load_model(cp_path)
-    RP_conv_ae_.fit(x_RP_clean_mf_train, x_RP_clean_mf_train, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
+    RP_conv_ae_.fit(x_RP_clean_train, x_RP_clean_train, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
 
 
 def pretrain_ts(epochs=1000, batch_size=200):
@@ -104,7 +97,7 @@ def pretrain_ts(epochs=1000, batch_size=200):
     ts_conv1d_ae_ = ts_conv2d_ae
     if exists(cp_path):
         ts_conv1d_ae_ = load_model(cp_path)
-    ts_conv1d_ae_.fit(x_trj_seg_clean_of_train, x_trj_seg_clean_of_train, batch_size=batch_size, epochs=epochs,
+    ts_conv1d_ae_.fit(x_features_series_clean_train, x_features_series_clean_train, batch_size=batch_size, epochs=epochs,
                       callbacks=[tb, cp])
 
 
@@ -114,15 +107,15 @@ def train_classifier(epochs=100, batch_size=200):
                          verbose=1,
                          save_best_only=True, mode='max')
     early_stopping = EarlyStopping(monitor='val_dense_3_loss', patience=patience, verbose=2)
-    RP_conv_ae = load_model('./comparison_results/RP_conv_ae_check_point.model')
-    spatial_conv1d_ae_ = load_model('./comparison_results/ts_conv_ae_check_point.model')
-    hist = dual_sae.fit([x_RP_clean_mf_train, x_trj_seg_clean_of_train],
-                        [x_RP_clean_mf_train, y_train, x_trj_seg_clean_of_train],
+    load_model('./comparison_results/RP_conv_ae_check_point.model')
+    load_model('./comparison_results/ts_conv_ae_check_point.model')
+    hist = dual_sae.fit([x_RP_clean_train, x_features_series_clean_train],
+                        [x_RP_clean_train, y_train, x_features_series_clean_train],
                         epochs=epochs,
                         batch_size=batch_size, shuffle=True,
                         validation_data=(
-                            [x_RP_clean_mf_test, x_trj_seg_clean_of_test],
-                            [x_RP_clean_mf_test, y_test, x_trj_seg_clean_of_test]),
+                            [x_RP_clean_test, x_features_series_clean_test],
+                            [x_RP_clean_test, y_test, x_features_series_clean_test]),
                         callbacks=[early_stopping, tb, cp]
                         )
     #
@@ -133,7 +126,7 @@ def train_classifier(epochs=100, batch_size=200):
 
 def show_confusion_matrix():
     sae = load_model('./comparison_results/sae_check_point.model', custom_objects={'N_CLASS': N_CLASS})
-    pred = sae.predict([x_RP_clean_mf_test, x_trj_seg_clean_of_test])
+    pred = sae.predict([x_RP_clean_test, x_features_series_clean_test])
     y_pred = np.argmax(pred[1], axis=1)
     y_true = np.argmax(y_test, axis=1)
     cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)

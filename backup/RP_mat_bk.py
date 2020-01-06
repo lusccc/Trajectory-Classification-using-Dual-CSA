@@ -3,15 +3,11 @@ from math import cos, pi
 import numpy as np
 from numpy.linalg import norm
 from pyts.image.recurrence import _trajectories
-from scipy.spatial.distance import pdist, squareform
-
-#  Settings for the embedding
-from sklearn.preprocessing import StandardScaler
 
 from params import DIM, TAU, RP_MAT_SCALE_EACH_FEATURE, RP_MAT_SCALE_ALL
 from utils import scale_any_shape_data
-from multiprocessing import Process, Lock
 
+#  Settings for the embedding
 
 
 # Distance metric in phase space ->

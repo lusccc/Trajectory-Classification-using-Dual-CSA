@@ -1,9 +1,7 @@
-from keras.layers import Conv2D, Flatten, MaxPooling2D, Reshape, UpSampling2D, Conv2DTranspose, Lambda, \
-    BatchNormalization, Activation
-from keras.layers import Input, Dense
-from keras.models import Model
-from keras.utils import plot_model, to_categorical
-from keras import backend as K, Sequential
+from keras import Sequential
+from keras.layers import Conv2D, Flatten, MaxPooling2D, Reshape, UpSampling2D, Conv2DTranspose, Activation
+from keras.layers import Dense
+from keras.utils import plot_model
 
 
 def CONV2D_AE(input_shape, embedding_dim, n_features, name):

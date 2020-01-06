@@ -5,9 +5,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils import shuffle
 
 from params import MIN_N_POINTS, MAX_SEGMENT_SIZE, SCALE_SEGS_EACH_FEATURE, FILTER_SEGS
-from time_utils import timestamp_to_hour
+from backup.Time_utils import timestamp_to_hour
 from trajectory_extraction import MODE_NAMES
-
 # walk, bike, bus, driving, train/subway
 # modes_to_use = [0,1,2,3,4]
 from utils import scale_data, hampel_filter_forloop_numba, segment_single_series, calc_initial_compass_bearing, \

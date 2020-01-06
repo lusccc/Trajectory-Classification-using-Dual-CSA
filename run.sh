@@ -1,4 +1,6 @@
 rm -rf ./logs
+mkdir ./results
+mkdir ./results/visualization
 rm -rf ./results/*
 #python ./trajectory_segmentation_and_features.py
 #python MF_RP_mat.py

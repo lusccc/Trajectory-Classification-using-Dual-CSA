@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from keras import backend as K, Sequential
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint
@@ -10,8 +12,6 @@ from keras.utils import plot_model, to_categorical
 from sklearn.model_selection import train_test_split
 
 from PEDCC import TOTAL_EMBEDDING_DIM, get_centroids, N_CLASS
-
-import os
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 

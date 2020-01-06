@@ -4,11 +4,11 @@ import glob
 import os
 import os.path
 
-
 import numpy as np
 import pandas as pd
 
-from time_utils import datatime_to_timestamp
+from params import modes_to_use
+from utils import datatime_to_timestamp
 
 MODE_NAMES = ['walk', 'bike', 'bus', 'car', 'subway', 'train', 'airplane', 'boat', 'run', 'motorcycle', 'taxi']
 # mode_ids = {s : i + 1 for i, s in enumerate(mode_names)}
@@ -21,8 +21,7 @@ for i, s in enumerate(MODE_NAMES):
     else:
         modes[s] = i
 print('modes:', modes)
-# walk, bike, bus, driving, //or train/subway
-modes_to_use = [0, 1, 2, 3, 4]
+
 print('modes to use:', modes_to_use)
 
 
@@ -117,7 +116,7 @@ def read_all_users(folder):
 if __name__ == '__main__':
     trjs = []
     trjs_labels = []
-    df = read_all_users('./Data')
+    df = read_all_users('./raw_data')
     trjs = np.array(trjs)
     labels = np.array(trjs_labels)
 

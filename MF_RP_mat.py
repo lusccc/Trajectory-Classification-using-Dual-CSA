@@ -4,10 +4,10 @@ import numpy as np
 from numpy.linalg import norm
 from pyts.image.recurrence import _trajectories
 
-#  Settings for the embedding
-
-from params import DIM, TAU, movement_features
+from params import DIM, TAU, features_set_1
 from utils import scale_any_shape_data
+
+#  Settings for the embedding
 
 # Distance metric in phase space ->
 # Possible choices ("manhattan","euclidean","supremum")
@@ -93,8 +93,7 @@ if __name__ == '__main__':
     for type in data_type:
         print('++++++++data type:', type)
         # only use movement features to generate RP mat
-        trjs_segs_features = np.load('./geolife_features/trjs_segs_{}_features.npy'.format(type))[:, :, :,
-                             movement_features]
+        trjs_segs_features = np.load('./geolife_features/trjs_segs_{}_features.npy'.format(type))
 
         features_RP_mats = []
         n_features = trjs_segs_features.shape[3]

@@ -1,27 +1,26 @@
+import os
 from os.path import exists
-import seaborn as sns
-from sklearn.metrics import confusion_matrix, classification_report
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 from keras import backend as K
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint
 from keras.engine.saving import load_model
+from keras.layers import Input
 from keras.layers import Lambda, \
     concatenate
-from keras.layers import Input
 from keras.metrics import categorical_accuracy
 from keras.models import Model
 from keras.utils import plot_model, to_categorical
-
-import os
+from sklearn.metrics import confusion_matrix, classification_report
 
 from CONV2D_AE import CONV2D_AE
 from LSTM_AE import LSTM_AE
-from params import N_CLASS, TOTAL_EMBEDDING_DIM
 from TS_CONV2D_AE import TS_CONV2D_AE
+from params import N_CLASS, TOTAL_EMBEDDING_DIM
 from trajectory_extraction import modes_to_use
-from trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
+from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 

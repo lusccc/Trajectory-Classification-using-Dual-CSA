@@ -1,5 +1,5 @@
-from keras import Sequential, Model
-from keras.layers import GRU, RepeatVector, TimeDistributed, Dense, LSTM
+from keras import Sequential
+from keras.layers import GRU, RepeatVector, TimeDistributed, Dense
 from keras.utils import plot_model
 
 

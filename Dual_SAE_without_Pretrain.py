@@ -141,8 +141,6 @@ def train_classifier(epochs=100, batch_size=200):
                          save_best_only=True, mode='max')
     early_stopping = EarlyStopping(monitor='val_lambda_1_loss', patience=patience, verbose=2)
     visulazation_callback = SAE_embedding_visualization_callback('./results/sae_cp_{epoch}.h5')
-    load_model('./results/RP_conv_ae_check_point.model')
-    load_model('./results/ts_conv_ae_check_point.model')
     hist = dual_sae.fit([x_RP_clean_train, x_centroids_train, x_features_series_clean_train],
                         [x_RP_clean_train, y_train, x_features_series_clean_train],
                         epochs=epochs,
@@ -224,10 +222,7 @@ if __name__ == '__main__':
     RP_conv2d_ae = RP_Conv2D_AE()
     ts_conv2d_ae = ts_Conv2d_AE()
     dual_sae, dual_encoder = dual_SAE()
-    pretrain_RP(100, batch_size)
-    pretrain_ts(350, batch_size)
     visualize_centroids()
-    visualize_dual_ae_embedding()
     train_classifier(3000, batch_size)
     show_confusion_matrix()
     visualize_sae_embedding()

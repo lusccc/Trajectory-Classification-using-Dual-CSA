@@ -1,20 +1,19 @@
+import os
 from os.path import exists
 
 import numpy as np
-from keras import backend as K, Sequential
+from keras import backend as K
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint
 from keras.engine.saving import load_model
-from keras.layers import Conv2D, Flatten, MaxPooling2D, Reshape, UpSampling2D, Conv2DTranspose, Lambda, \
-    BatchNormalization, Activation, concatenate
-from keras.layers import Input, Dense
+from keras.layers import Input
+from keras.layers import Lambda, \
+    concatenate
 from keras.models import Model
 from keras.utils import plot_model, to_categorical
 from sklearn.model_selection import train_test_split
 
-import os
-
-from PEDCC import get_centroids
 from CONV2D_AE import CONV2D_AE
+from PEDCC import get_centroids
 from params import N_CLASS, TOTAL_EMBEDDING_DIM
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"

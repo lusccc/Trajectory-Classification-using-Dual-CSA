@@ -1,20 +1,16 @@
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
-from sklearn.tree import DecisionTreeClassifier
-
-from params import N_CLASS, movement_features, MAX_SEGMENT_SIZE, TOTAL_EMBEDDING_DIM
 
 from dataset import *
+from params import features_set_1
 from trajectory_extraction import modes_to_use
+
 #RandomForestClassifier(),SVC(),KNeighborsClassifier(),   MLPClassifier(), DecisionTreeClassifier(),
 ml_models = [ SVC() ]
 
-n_features = len(movement_features)
-x_train = np.squeeze(x_trj_seg_clean_of_train)
-x_test = np.squeeze(x_trj_seg_clean_of_test)
+n_features = len(features_set_1)
+x_train = np.squeeze(x_features_series_clean_train)
+x_test = np.squeeze(x_features_series_clean_test)
 
 # construct data suitable for ml classifier
 # https://stackoverflow.com/questions/57371065/how-to-use-time-series-data-in-classification-in-sklearn

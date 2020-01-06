@@ -1,8 +1,5 @@
-from datetime import datetime
-import os
-
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 dts = np.load('./geolife/train_mf_segments.npy')
 stss = dts[:,0,:,9].reshape((-1, 1))

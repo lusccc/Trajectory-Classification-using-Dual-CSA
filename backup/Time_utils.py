@@ -1,5 +1,7 @@
-from datetime import datetime
 import time
+from datetime import datetime
+
+
 def datatime_to_timestamp(dt):
     # print dt
     """时间转换为时间戳，单位秒"""

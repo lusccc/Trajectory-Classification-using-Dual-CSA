@@ -1,11 +1,10 @@
 # coding=utf-8
-from math import sqrt, sin, isclose
+from math import sin, isclose
 
-from scipy import interpolate, signal, spatial, ndimage
-from sklearn.preprocessing import MinMaxScaler
 import numpy as np
-import matplotlib.pyplot as plt
+from scipy import spatial
 from scipy.interpolate import interp1d
+from sklearn.preprocessing import MinMaxScaler
 
 
 def dot(a, b):

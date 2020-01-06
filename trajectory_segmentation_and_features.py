@@ -1,9 +1,9 @@
-from params import MIN_N_POINTS
 import numpy as np
 from geopy.distance import geodesic
 from sklearn.utils import shuffle
 
-from time_utils import timestamp_to_hour
+from params import MIN_N_POINTS
+from utils import timestamp_to_hour
 from trajectory_extraction import MODE_NAMES
 from utils import segment_single_series, check_lat_lng, calc_initial_compass_bearing, interp_single_series
 

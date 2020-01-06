@@ -1,15 +1,17 @@
 import math
 
+import numpy as np
+from matplotlib import pyplot as plt
 from numba import jit
 from scipy.interpolate import interp1d
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-import numpy as np
+from sklearn import manifold
 
 from params import SCALER, MAX_SEGMENT_SIZE, MIN_N_POINTS
+import time
+from datetime import datetime
 
 
 def scale_any_shape_data(data, scaler=SCALER):
-
     data = np.array(data)
     shape_ = data.shape
     data = data.reshape((-1, 1))
@@ -18,8 +20,8 @@ def scale_any_shape_data(data, scaler=SCALER):
     data = np.reshape(data, shape_)
     return data
 
-def scale_data(data, scaler=SCALER):
 
+def scale_data(data, scaler=SCALER):
     data = np.array(data)
     data = scaler.fit_transform(data)
     return data
@@ -40,6 +42,7 @@ def hampel_filter_forloop_numba(input_series, window_size=10, n_sigmas=3):
             indices.append(i)
 
     return new_series
+
 
 def check_lat_lng(p):
     lat = p[0]
@@ -70,6 +73,7 @@ def segment_single_series(series, max_size=MAX_SEGMENT_SIZE):
             rest_series = series[index:size]
             segments.append(rest_series)
         return np.array(segments)
+
 
 def calc_initial_compass_bearing(pointA, pointB):
     # https://gist.github.com/jeromer/2005586
@@ -121,12 +125,41 @@ def interp_single_series(series, target_size=MAX_SEGMENT_SIZE):
         interp_y = interp1d(x, y, kind='linear')(interp_x)
         return interp_y
 
+
 def padzeros(series, target_size=MAX_SEGMENT_SIZE):
     new_series = np.zeros(target_size)
     new_series[:len(series)] = series
     return new_series
 
 
+def visualizeData(Z, labels, num_clusters, title='visualization.png'):
+    '''
+    TSNE visualization of the points in latent space Z
+    :param Z: Numpy array containing points in latent space in which clustering was performed
+    :param labels: True labels - used for coloring points
+    :param num_clusters: Total number of clusters
+    :param title: filename where the plot should be saved
+    :return: None - (side effect) saves clustering visualization plot in specified location
+    '''
+    tsne = manifold.TSNE(n_components=2, init='pca', random_state=0)
+    Z_tsne = tsne.fit_transform(Z)
+    fig = plt.figure()
+    plt.scatter(Z_tsne[:, 0], Z_tsne[:, 1], s=2, c=labels, cmap=plt.cm.get_cmap("jet", num_clusters))
+    plt.colorbar(ticks=range(num_clusters))
+    fig.savefig(title, dpi=fig.dpi)
+    # plt.show()
 
 
+def datatime_to_timestamp(dt):
+    # print dt
+    """时间转换为时间戳，单位秒"""
+    # 转换成时间数组
+    time_array = time.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
+    # 转换成时间戳
+    timestamp = time.mktime(time_array)  # 单位 s
+    # print timestamp
+    return int(timestamp)
 
+
+def timestamp_to_hour(ts):
+    return datetime.fromtimestamp(ts).hour

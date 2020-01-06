@@ -1,19 +1,18 @@
+import os
 from os.path import exists
-import seaborn as sns
-from sklearn.metrics import confusion_matrix, classification_report
-import matplotlib.pyplot as plt
 
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 from keras import backend as K
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint
 from keras.engine.saving import load_model
-from keras.layers import Lambda
 from keras.layers import Input
+from keras.layers import Lambda
 from keras.metrics import categorical_accuracy
 from keras.models import Model
 from keras.utils import plot_model, to_categorical
-
-import os
+from sklearn.metrics import confusion_matrix, classification_report
 
 from CONV2D_AE import CONV2D_AE
 from params import N_CLASS, TOTAL_EMBEDDING_DIM
