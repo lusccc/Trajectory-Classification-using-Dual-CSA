@@ -2,7 +2,8 @@ import numpy as np
 from geopy.distance import geodesic
 from sklearn.utils import shuffle
 
-from params import MIN_N_POINTS
+from params import *
+
 from utils import timestamp_to_hour
 from trajectory_extraction import MODE_NAMES
 from utils import segment_single_series, check_lat_lng, calc_initial_compass_bearing, interp_single_series
@@ -13,9 +14,10 @@ from utils import segment_single_series, check_lat_lng, calc_initial_compass_bea
 SPEED_LIMIT = {0: 7, 1: 12, 2: 120. / 3.6, 3: 180. / 3.6, 4: 120 / 3.6, 5: 120 / 3.6}
 # acceleration
 ACC_LIMIT = {0: 3, 1: 3, 2: 2, 3: 10, 4: 3, 5: 3}
-# heading change rate limit
-HCR_LIMIT = {0: 30, 1: 50, 2: 60, 3: 90, 4: 20}
-STOP_DISTANCE_LIMIT = 2  # meters
+#TODO  heading change rate limit, not sure
+HCR_LIMIT = {0: 30, 1: 60, 2: 70, 3: 120, 4: 30} #{0: 30, 1: 50, 2: 60, 3: 90, 4: 20}
+# TODO  changeable !!!!!
+STOP_DISTANCE_LIMIT = 3  # meters, previous is 2
 STOP_VELOCITY_LIMIT = 2
 STRAIGHT_MOVING_DEGREE_LIMIT = 30  # abs value, less than this limit mean still straight
 

@@ -1,21 +1,12 @@
-import matplotlib.pyplot as plt
+import tables
 import numpy as np
 
-dts = np.load('./geolife/train_mf_segments.npy')
-stss = dts[:,0,:,9].reshape((-1, 1))
-plt.plot(stss)
-plt.show()
-NNN=1
-cc = []
-def c():
-    a = 1
-    NNN += 1
-    cc.append()
 
-if __name__ == '__main__':
-    NNN = 0
+def gen_mf_RP_mats(series, batch_size=10, scale=False):
+    n = len(series)
+    for i in range(0, n, batch_size):
+        print(i, i + batch_size)
+        print(series[i:i+batch_size])
 
-
-
-
-
+a = np.array(range(125))
+gen_mf_RP_mats(a)

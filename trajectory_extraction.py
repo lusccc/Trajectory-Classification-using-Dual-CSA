@@ -6,8 +6,8 @@ import os.path
 
 import numpy as np
 import pandas as pd
+from params import *
 
-from params import modes_to_use
 from utils import datatime_to_timestamp
 
 MODE_NAMES = ['walk', 'bike', 'bus', 'car', 'subway', 'train', 'airplane', 'boat', 'run', 'motorcycle', 'taxi']

@@ -216,7 +216,8 @@ if __name__ == '__main__':
     aka. centroids has dim TOTAL_EMBEDDING_DIM"""
     n_ae = 2  # num of ae
     each_embedding_dim = int(TOTAL_EMBEDDING_DIM / n_ae)
-    loss_weights = [1, 3, 1]
+    """no joint train here!"""
+    loss_weights = [0, 1, 0]
     patience = 35
 
     RP_conv2d_ae = RP_Conv2D_AE()

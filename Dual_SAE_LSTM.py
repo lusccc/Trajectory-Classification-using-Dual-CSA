@@ -4,7 +4,7 @@ from os.path import exists
 import matplotlib.pyplot as plt
 import seaborn as sns
 from keras import backend as K
-from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint, ReduceLROnPlateau
+from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint
 from keras.engine.saving import load_model
 from keras.layers import Input
 from keras.layers import Lambda, \
@@ -15,16 +15,15 @@ from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
 
 from CONV2D_AE import CONV2D_AE
+from LSTM_AE import LSTM_AE
 from TS_CONV2D_AE import TS_CONV2D_AE
 from dataset import *
 from params import TOTAL_EMBEDDING_DIM, MULTI_GPU
 from trajectory_extraction import modes_to_use
 from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 from utils import visualizeData
-from params import *
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 def student_t(z, u, alpha=1.):
@@ -58,35 +57,33 @@ def RP_Conv2D_AE():
     return RP_conv_ae
 
 
-def ts_Conv2d_AE():
+def ts_LSTM_AE():
     n_features = x_features_series_clean_train.shape[3]
-    ts_conv_ae = TS_CONV2D_AE((1, MAX_SEGMENT_SIZE, n_features), each_embedding_dim, n_features, 'ts')
-    if MULTI_GPU:
-        ts_conv_ae = multi_gpu_model(ts_conv_ae, gpus=2)
-    ts_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
-    return ts_conv_ae
+    ts_lstm_ae = LSTM_AE(MAX_SEGMENT_SIZE, each_embedding_dim, n_features, 'ts')
+    ts_lstm_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+    return ts_lstm_ae
 
 
 def dual_SAE():
     """--------SAE----------"""
     concat_embedding = concatenate([RP_conv2d_ae.get_layer('RP_embedding').output,
-                                    ts_conv2d_ae.get_layer('ts_embedding').output])
+                                    ts_lstm_ae.get_layer('ts_embedding').output])
     centroids_input = Input((N_CLASS, TOTAL_EMBEDDING_DIM))
     classification = classification_layer([concat_embedding, centroids_input])
 
     dual_sae = Model(
-        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv2d_ae.get_layer(index=0).input],
+        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_lstm_ae.get_layer(index=0).input],
         outputs=[RP_conv2d_ae.get_layer('RP_reconstruction').output, classification,
-                 ts_conv2d_ae.get_layer('ts_reconstruction').output])
+                 ts_lstm_ae.get_layer('ts_reconstruction').output])
     dual_sae.summary()
-    plot_model(dual_sae, to_file='./results/dual_sae.png', show_shapes=True)
+    plot_model(dual_sae, to_file='./results_dsl/dual_sae.png', show_shapes=True)
 
     dual_encoder = Model(
-        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv2d_ae.get_layer(index=0).input],
+        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_lstm_ae.get_layer(index=0).input],
         outputs=[concat_embedding]
     )
     dual_encoder.summary()
-    plot_model(dual_encoder, to_file='./results/dual_encoder.png', show_shapes=True)
+    plot_model(dual_encoder, to_file='./results_dsl/dual_encoder.png', show_shapes=True)
 
     if MULTI_GPU:
         dual_sae = multi_gpu_model(dual_sae, gpus=2)
@@ -112,7 +109,7 @@ def pretrain_RP(epochs=1000, batch_size=200):
     pretrain is unsupervised, all data could use to train
     """
     print('pretrain_RP')
-    cp_path = './results/RP_conv_ae_check_point.model'
+    cp_path = './results_dsl/RP_conv_ae_check_point.model'
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
     RP_conv_ae_ = RP_conv2d_ae
@@ -126,37 +123,34 @@ def pretrain_ts(epochs=1000, batch_size=200):
     pretrain is unsupervised, all data could use to train
     """
     print('pretrain_ts')
-    cp_path = './results/ts_conv_ae_check_point.model'
+    cp_path = './results_dsl/ts_conv_ae_check_point.model'
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
-    ts_conv1d_ae_ = ts_conv2d_ae
+    ts_conv1d_ae_ = ts_lstm_ae
     if exists(cp_path):
         ts_conv1d_ae_ = load_model(cp_path)
-    ts_conv1d_ae_.fit(x_features_series_clean_train, x_features_series_clean_train, batch_size=batch_size,
-                      epochs=epochs,
+    ts_conv1d_ae_.fit(np.squeeze(x_features_series_clean_train), np.squeeze(x_features_series_clean_train),
+                      batch_size=batch_size, epochs=epochs,
                       callbacks=[tb, cp])
 
 
 def train_classifier(epochs=100, batch_size=200):
     print('train_classifier...')
-    factor = 1. / np.cbrt(2)
-    cp = ModelCheckpoint('./results/sae_check_point.model', monitor='val_lambda_1_acc',
+    cp = ModelCheckpoint('./results_dsl/sae_check_point.model', monitor='val_lambda_1_acc',
                          verbose=1,
                          save_best_only=True, mode='max')
     early_stopping = EarlyStopping(monitor='val_lambda_1_loss', patience=patience, verbose=2)
-    # reduce_lr = ReduceLROnPlateau(monitor='loss', patience=100, mode='auto',
-    #                               factor=factor, cooldown=0, min_lr=1e-4, verbose=2)
-    visulazation_callback = SAE_embedding_visualization_callback('./results/sae_cp_{epoch}.h5')
-    load_model('./results/RP_conv_ae_check_point.model')
-    load_model('./results/ts_conv_ae_check_point.model')
-    hist = dual_sae.fit([x_RP_clean_train, x_centroids_train, x_features_series_clean_train],
-                        [x_RP_clean_train, y_train, x_features_series_clean_train],
+    visulazation_callback = SAE_embedding_visualization_callback('./results_dsl/sae_cp_{epoch}.h5')
+    load_model('./results_dsl/RP_conv_ae_check_point.model')
+    load_model('./results_dsl/ts_conv_ae_check_point.model')
+    hist = dual_sae.fit([x_RP_clean_train, x_centroids_train, np.squeeze(x_features_series_clean_train)],
+                        [x_RP_clean_train, y_train, np.squeeze(x_features_series_clean_train)],
                         epochs=epochs,
                         batch_size=batch_size, shuffle=True,
                         validation_data=(
-                            [x_RP_clean_test, x_centroids_test, x_features_series_clean_test],
-                            [x_RP_clean_test, y_test, x_features_series_clean_test]),
-                        callbacks=[early_stopping, tb, cp, visulazation_callback, ]
+                            [x_RP_clean_test, x_centroids_test, np.squeeze(x_features_series_clean_test)],
+                            [x_RP_clean_test, y_test, np.squeeze(x_features_series_clean_test)]),
+                        callbacks=[early_stopping, tb, cp, visulazation_callback]
                         )
     #
     score = np.argmax(hist.history['val_lambda_1_acc'])
@@ -171,13 +165,14 @@ class SAE_embedding_visualization_callback(ModelCheckpoint):
     # redefine the save so it only activates after 100 epochs
     def on_epoch_end(self, epoch, logs=None):
         if epoch % 4 == 0:
-            embedding = dual_encoder.predict([x_RP_clean_test, x_centroids_test, x_features_series_clean_test])
+            embedding = dual_encoder.predict([x_RP_clean_test, x_centroids_test, np.squeeze(x_features_series_clean_test)])
             y_true = np.argmax(y_test, axis=1)
-            visualizeData(embedding, y_true, N_CLASS, './results/visualization/sae_embedding_epoch{}.png'.format(epoch))
+            visualizeData(embedding, y_true, N_CLASS,
+                          './results_dsl/visualization/sae_embedding_epoch{}.png'.format(epoch))
 
 
 def show_confusion_matrix():
-    sae = load_model('./results/sae_check_point.model', custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
+    sae = load_model('./results_dsl/sae_check_point.model', custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
     pred = sae.predict([x_RP_clean_test, x_centroids_test, x_features_series_clean_test])
     y_pred = np.argmax(pred[1], axis=1)
     y_true = np.argmax(y_test, axis=1)
@@ -196,42 +191,42 @@ def show_confusion_matrix():
 
 
 def visualize_sae_embedding():
-    sae = load_model('./results/sae_check_point.model', custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
+    sae = load_model('./results_dsl/sae_check_point.model', custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
     embedding = dual_encoder.predict([x_RP_clean_test, x_centroids_test, x_features_series_clean_test])
     y_true = np.argmax(y_test, axis=1)
-    visualizeData(embedding, y_true, N_CLASS, './results/visualization/best.png')
+    visualizeData(embedding, y_true, N_CLASS, './results_dsl/visualization/best.png')
 
 
 def visualize_dual_ae_embedding():
-    load_model('./results/RP_conv_ae_check_point.model')
-    load_model('./results/ts_conv_ae_check_point.model')
-    embedding = dual_encoder.predict([x_RP_clean_test, x_centroids_test, x_features_series_clean_test])
+    load_model('./results_dsl/RP_conv_ae_check_point.model')
+    load_model('./results_dsl/ts_conv_ae_check_point.model')
+    embedding = dual_encoder.predict([x_RP_clean_test, x_centroids_test, np.squeeze(x_features_series_clean_test)])
     y_true = np.argmax(y_test, axis=1)
-    visualizeData(embedding, y_true, N_CLASS, './results/visualization/dual_ae_embedding.png')
+    visualizeData(embedding, y_true, N_CLASS, './results_dsl/visualization/dual_ae_embedding.png')
 
 
 def visualize_centroids():
-    visualizeData(x_centroids_test[0], modes_to_use, N_CLASS, './results/visualization/centroids_visualization.png')
+    visualizeData(x_centroids_test[0], modes_to_use, N_CLASS, './results_dsl/visualization/centroids_visualization.png')
 
 
 if __name__ == '__main__':
     epochs = 30
-    batch_size = 600
+    batch_size = 300
     """ note: each autoencoder has same embedding,
      embedding will be concated to match TOTAL_EMBEDDING_DIM, 
     aka. centroids has dim TOTAL_EMBEDDING_DIM"""
     n_ae = 2  # num of ae
     each_embedding_dim = int(TOTAL_EMBEDDING_DIM / n_ae)
     loss_weights = [1, 3, 1]
-    patience = 200
+    patience = 35
 
     RP_conv2d_ae = RP_Conv2D_AE()
-    ts_conv2d_ae = ts_Conv2d_AE()
+    ts_lstm_ae = ts_LSTM_AE()
     dual_sae, dual_encoder = dual_SAE()
-    # pretrain_RP(100, batch_size)
-    # pretrain_ts(350, batch_size)
+    # pretrain_RP(100, 800)
+    # pretrain_ts(30, 5000)
     # visualize_centroids()
-    # visualize_dual_ae_embedding()
+    visualize_dual_ae_embedding()
     train_classifier(3000, batch_size)
     show_confusion_matrix()
     visualize_sae_embedding()

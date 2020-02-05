@@ -1,6 +1,7 @@
 import numpy as np
 
-from params import TOTAL_EMBEDDING_DIM, N_CLASS
+from params import *
+
 from utils import scale_any_shape_data
 
 '''

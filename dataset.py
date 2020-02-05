@@ -1,10 +1,23 @@
 import numpy as np
+import tables
 from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-from params import N_CLASS, features_set_2, features_set_1
+from PEDCC import generate_center, u, v, G, repeat
+from params import *
+
 from utils import scale_any_shape_data
+
+def train_set_generator(batch_size):
+    h5fs = []
+    for i in features_set_1:
+        h5fs.append(tables.open_file('RP_mats_clean_feature_{}_mf.hdf5'.format(i), mode='r').root.data)
+    while True:
+
+
+    
+
 
 
 def make_dataset():
@@ -74,8 +87,6 @@ def make_dataset():
     np.save('./geolife_features/y_test.npy', y_test)
 
 
-# make_dataset()
-
 x_RP_clean_train = np.load('./geolife_features/x_RP_clean_train.npy', )
 x_RP_clean_test = np.load('./geolife_features/x_RP_clean_test.npy', )
 x_RP_noise_train = np.load('./geolife_features/x_RP_noise_train.npy', )
@@ -88,3 +99,23 @@ x_centroids_train = np.load('./geolife_features/x_centroids_train.npy', )
 x_centroids_test = np.load('./geolife_features/x_centroids_test.npy', )
 y_train = np.load('./geolife_features/y_train.npy', )
 y_test = np.load('./geolife_features/y_test.npy', )
+
+
+def regenerate_PEDCC():
+    c = generate_center(u, v, G)
+    RP_mats_mf_filtered = np.load('./geolife_features/RP_mats_clean_mf.npy')
+
+    n_samples = RP_mats_mf_filtered.shape[0]
+
+    # !!those data are generated, no real trajectory data involved!!
+    scale = True
+    centroids = repeat(c, n_samples, scale)
+    np.save('./geolife_features/centroids.npy', centroids)
+
+    x_centroids_train, x_centroids_test = train_test_split(centroids, test_size=0.20, random_state=7, shuffle=True)
+    np.save('./geolife_features/x_centroids_train.npy', x_centroids_train)
+    np.save('./geolife_features/x_centroids_test.npy', x_centroids_test)
+
+if __name__ == '__main__':
+    make_dataset()
+    # regenerate_PEDCC()
