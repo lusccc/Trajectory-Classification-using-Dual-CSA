@@ -1,3 +1,5 @@
+import multiprocessing
+
 import numpy as np
 from geopy.distance import geodesic
 from sklearn.utils import shuffle
@@ -14,15 +16,15 @@ from utils import segment_single_series, check_lat_lng, calc_initial_compass_bea
 SPEED_LIMIT = {0: 7, 1: 12, 2: 120. / 3.6, 3: 180. / 3.6, 4: 120 / 3.6, 5: 120 / 3.6}
 # acceleration
 ACC_LIMIT = {0: 3, 1: 3, 2: 2, 3: 10, 4: 3, 5: 3}
-#TODO  heading change rate limit, not sure
-HCR_LIMIT = {0: 30, 1: 60, 2: 70, 3: 120, 4: 30} #{0: 30, 1: 50, 2: 60, 3: 90, 4: 20}
+# TODO  heading change rate limit, not sure
+HCR_LIMIT = {0: 30, 1: 60, 2: 70, 3: 120, 4: 30}  # {0: 30, 1: 50, 2: 60, 3: 90, 4: 20}
 # TODO  changeable !!!!!
 STOP_DISTANCE_LIMIT = 3  # meters, previous is 2
 STOP_VELOCITY_LIMIT = 2
 STRAIGHT_MOVING_DEGREE_LIMIT = 30  # abs value, less than this limit mean still straight
 
 
-def segment_trjs(trjs, labels):
+def do_segment_trjs(trjs, labels):
     trjs_segs = []
     trjs_segs_labels = []
     for trj, label in zip(trjs, labels):
@@ -33,7 +35,20 @@ def segment_trjs(trjs, labels):
     return np.array(trjs_segs), np.array(trjs_segs_labels)
 
 
-def filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels):
+def segment_trjs(trjs, labels):
+    tasks = []
+    batch_size = int(len(trjs) / N_CPUS + 1)
+    for i in range(0, N_CPUS):
+        tasks.append(POOL.apply_async(do_segment_trjs, (trjs[i:i + batch_size], labels[i:i + batch_size])))
+
+    res = np.array([[t.get()[0], t.get()[1]] for t in tasks])
+    print(np.shape(res))
+    trjs_segs = np.concatenate(res[:, 0])
+    trjs_segs_labels = np.concatenate(res[:, 1])
+    return trjs_segs, trjs_segs_labels
+
+
+def do_filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels):
     new_trjs_segs = []
     new_trjs_segs_labels = []
     for trj_seg, trj_seg_label in zip(trjs_segs, trjs_segs_labels):
@@ -74,7 +89,20 @@ def filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels):
     return np.array(new_trjs_segs), np.array(new_trjs_segs_labels)
 
 
-def calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels):
+def filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels):
+    tasks = []
+    batch_size = int(len(trjs) / N_CPUS + 1)
+    for i in range(0, N_CPUS):
+        tasks.append(POOL.apply_async(do_filter_trjs_segs_gps_data,
+                                      (trjs_segs[i:i + batch_size], trjs_segs_labels[i:i + batch_size])))
+    res = np.array([[t.get()[0], t.get()[1]] for t in tasks])
+    print(np.shape(res))
+    trjs_segs = np.concatenate(res[:, 0])
+    trjs_segs_labels = np.concatenate(res[:, 1])
+    return trjs_segs, trjs_segs_labels
+
+
+def do_calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_function):
     valid_trjs_segs = []
 
     trjs_segs_features = []
@@ -120,13 +148,13 @@ def calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels):
             tn = 0 if abs(hc) < STRAIGHT_MOVING_DEGREE_LIMIT else 1  # 1-(abs(hc)/STRAIGHT_MOVING_DEGREE_LIMIT)
 
             if v > SPEED_LIMIT[trj_seg_label]:  # ?? or v == 0
-                print('invalid speed:{} for {}'.format(v, MODE_NAMES[trj_seg_label]))
+                # print('invalid speed:{} for {}'.format(v, MODE_NAMES[trj_seg_label]))
                 continue
             if abs(a) > ACC_LIMIT[trj_seg_label]:
-                print('invalid acc:{} for {}'.format(a, MODE_NAMES[trj_seg_label]))
+                # print('invalid acc:{} for {}'.format(a, MODE_NAMES[trj_seg_label]))
                 continue
             if abs(hcr) > HCR_LIMIT[trj_seg_label]:  # ?? or hcr == 0
-                print('invalid hcr:{} for {}'.format(hcr, MODE_NAMES[trj_seg_label]))
+                # print('invalid hcr:{} for {}'.format(hcr, MODE_NAMES[trj_seg_label]))
                 continue
 
             delta_times.append(delta_t)
@@ -144,7 +172,7 @@ def calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels):
             prev_h = h
 
         if len(delta_times) < MIN_N_POINTS:
-            print('feature element num not enough:{}'.format(len(delta_times)))
+            # print('feature element num not enough:{}'.format(len(delta_times)))
             continue
         trj_seg_features = np.array(
             [[delta_t, hour, d, v, a, h, hc, hcr, s, tn] for delta_t, hour, d, v, a, h, hc, hcr, s, tn in
@@ -166,6 +194,20 @@ def calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels):
         valid_trjs_segs.append(i)
 
     return np.array(trjs_segs_features), np.array(trjs_segs_features_labels), valid_trjs_segs
+
+
+def calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_function):
+    tasks = []
+    batch_size = int(len(trjs) / N_CPUS + 1)
+    for i in range(0, N_CPUS):
+        tasks.append(POOL.apply_async(do_calc_trjs_segs_clean_features,
+                                      (trjs_segs[i:i + batch_size], trjs_segs_labels[i:i + batch_size],
+                                       fill_series_function)))
+    res = np.array([[t.get()[0], t.get()[1]] for t in tasks])
+    print(np.shape(res))
+    trjs_segs = np.concatenate(res[:, 0])
+    trjs_segs_labels = np.concatenate(res[:, 1])
+    return trjs_segs, trjs_segs_labels
 
 
 def calc_trjs_segs_noise_features(trjs_segs, trjs_segs_labels, valid_trjs_segs):
@@ -232,7 +274,7 @@ def calc_trjs_segs_noise_features(trjs_segs, trjs_segs_labels, valid_trjs_segs):
             prev_h = h
 
         if len(delta_times) < MIN_N_POINTS:
-            print('feature element num not enough:{}'.format(len(delta_times)))
+            # print('feature element num not enough:{}'.format(len(delta_times)))
             continue
         trj_seg_features = np.array(
             [[delta_t, hour, d, v, a, h, hc, hcr, s, tn] for delta_t, hour, d, v, a, h, hc, hcr, s, tn in
@@ -254,8 +296,12 @@ def calc_trjs_segs_noise_features(trjs_segs, trjs_segs_labels, valid_trjs_segs):
 
 
 if __name__ == '__main__':
-    trjs = np.load('./geolife/trjs.npy', allow_pickle=True)
-    labels = np.load('./geolife/labels.npy')
+    N_CPUS = multiprocessing.cpu_count()
+    print('n_thread:{}'.format(N_CPUS))
+    POOL = multiprocessing.Pool(processes=N_CPUS)
+
+    trjs = np.load('./data/geolife_extracted/trjs.npy', allow_pickle=True)
+    labels = np.load('./data/geolife_extracted/labels.npy', allow_pickle=True)
     trjs, labels = shuffle(trjs, labels, random_state=0)  # !!!shuffle
 
     # n_test = 1000
@@ -266,14 +312,8 @@ if __name__ == '__main__':
 
     trjs_segs, trjs_segs_labels = segment_trjs(trjs, labels)
     trjs_segs, trjs_segs_labels = filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels)
-    trjs_segs_clean_features, trjs_segs_clean_features_labels, valid_trjs_segs = calc_trjs_segs_clean_features(
-        trjs_segs, trjs_segs_labels)
-    trjs_segs_noise_features, trjs_segs_noise_features_labels = calc_trjs_segs_noise_features(trjs_segs,
-                                                                                              trjs_segs_labels,
-                                                                                              valid_trjs_segs)
+    trjs_segs_features, trjs_segs_features_labels = calc_trjs_segs_clean_features(
+        trjs_segs, trjs_segs_labels, fill_series_function)
 
-
-    np.save('./geolife_features/trjs_segs_clean_features.npy', trjs_segs_clean_features)
-    np.save('./geolife_features/trjs_segs_noise_features.npy', trjs_segs_noise_features)
-    # because trjs_segs_clean_features_labels and trjs_segs_noise_features_labels are equal, save as trjs_segs_features_labels.npy
-    np.save('./geolife_features/trjs_segs_features_labels.npy', trjs_segs_clean_features_labels)
+    np.save('./data/geolife_features/trjs_segs_features.npy', trjs_segs_features)
+    np.save('./data/geolife_features/trjs_segs_features_labels.npy', trjs_segs_features_labels)

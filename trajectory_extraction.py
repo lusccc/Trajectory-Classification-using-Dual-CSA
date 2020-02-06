@@ -1,7 +1,6 @@
 # coding=utf-8
-# https://heremaps.github.io/pptk/tutorials/viewer/geolife.html
+# reference from https://heremaps.github.io/pptk/tutorials/viewer/geolife.html
 import glob
-import os
 import os.path
 
 import numpy as np
@@ -9,10 +8,6 @@ import pandas as pd
 from params import *
 
 from utils import datatime_to_timestamp
-
-import multiprocessing
-
-
 
 MODE_NAMES = ['walk', 'bike', 'bus', 'car', 'subway', 'train', 'airplane', 'boat', 'run', 'motorcycle', 'taxi']
 # mode_ids = {s : i + 1 for i, s in enumerate(mode_names)}
@@ -76,12 +71,11 @@ def read_user(user_folder):
     labels_file = os.path.join(user_folder, 'labels.txt')
     if os.path.exists(labels_file):
         labels_details = read_labels(labels_file)
-        trjs, trjs_labels =  extract_trjs_with_labels(points, labels_details)
-        return trjs, trjs_labels
+        extract_trjs_with_labels(points, labels_details)
     else:
         points['label'] = 0
-        return [], []
 
+    return points
 
 
 # my code
@@ -89,8 +83,6 @@ def extract_trjs_with_labels(points, labels_details):
     points['time'] = points['time'].apply(datatime_to_timestamp)
     labels_details['start_time'] = labels_details['start_time'].apply(datatime_to_timestamp)
     labels_details['end_time'] = labels_details['end_time'].apply(datatime_to_timestamp)
-    trjs = []
-    trjs_labels = []
     for idx, label_detail in labels_details.iterrows():
         label = label_detail['label']
         if label not in modes_to_use:
@@ -103,40 +95,25 @@ def extract_trjs_with_labels(points, labels_details):
         trjs.append(trj)
         trjs_labels.append(label)
 
-    return trjs, trjs_labels
 
-
-def read_users(root_folder, subfolders):
-    trjs_res = []
-    trjs_labels_res = []
+def read_all_users(folder):
+    subfolders = os.listdir(folder)
+    dfs = []
     for i, sf in enumerate(subfolders):
-        print(' processing user %s' % (sf))
-        trjs, trjs_labels = read_user(os.path.join(root_folder, sf))
-        trjs_res.extend(trjs)
-        trjs_labels_res.extend(trjs_labels)
-    return trjs_res, trjs_labels_res
+        print('[%d/%d] processing user %s' % (i + 1, len(subfolders), sf))
+        df = read_user(os.path.join(folder, sf))
+        df['user'] = int(sf)
+        dfs.append(df)
+    return pd.concat(dfs)
 
 
 if __name__ == '__main__':
-    n_cpus = multiprocessing.cpu_count()
-    print('n_thread:{}'.format(n_cpus))
-    pool = multiprocessing.Pool(processes=n_cpus)
+    trjs = []
+    trjs_labels = []
+    df = read_all_users('./data/geolife_raw')
+    trjs = np.array(trjs)
+    labels = np.array(trjs_labels)
 
-    root_folder = './data/geolife_raw'
-    user_folders = os.listdir(root_folder)
-    n_user_folders = len(user_folders)
-
-    tasks = []
-    batch_size = int(n_user_folders / n_cpus + 1)
-    for i in range(0, n_cpus):
-        tasks.append(pool.apply_async(read_users, (root_folder, user_folders[i:i + batch_size])))
-
-    res = np.array([[t.get()[0], t.get()[0]] for t in tasks])
-    print(np.shape(res))
-    trjs = np.concatenate(res[:, 0])
-    labels = np.concatenate(res[:, 1])
-    print(trjs.shape)
-    print(labels.shape)
-
+    # 保存带标签的轨迹和 标签
     np.save('./data/geolife_extracted/trjs.npy', trjs)
     np.save('./data/geolife_extracted/labels.npy', labels)
