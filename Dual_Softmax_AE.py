@@ -24,8 +24,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def RP_Conv2D_AE():
     """ -----RP_conv_ae------"""
-    RP_mat_size = x_RP_clean_train.shape[1]  # 40
-    n_features = x_RP_clean_train.shape[3]
+    RP_mat_size = x_RP_train.shape[1]  # 40
+    n_features = x_RP_train.shape[3]
     RP_conv_ae = CONV2D_AE((RP_mat_size, RP_mat_size, n_features), each_embedding_dim, n_features, 'RP')
     if MULTI_GPU:
         RP_conv_ae = multi_gpu_model(RP_conv_ae, gpus=2)
@@ -34,7 +34,7 @@ def RP_Conv2D_AE():
 
 
 def ts_Conv2d_AE():
-    n_features = x_features_series_clean_train.shape[3]
+    n_features = x_features_series_train.shape[3]
     ts_conv1d_ae = TS_CONV2D_AE((1, MAX_SEGMENT_SIZE, n_features), each_embedding_dim, n_features, 'ts')
     if MULTI_GPU:
         ts_conv1d_ae = multi_gpu_model(ts_conv1d_ae, gpus=2)
@@ -83,7 +83,7 @@ def pretrain_RP(epochs=1000, batch_size=200):
     RP_conv_ae_ = RP_conv2d_ae
     if exists(cp_path):
         RP_conv_ae_ = load_model(cp_path)
-    RP_conv_ae_.fit(x_RP_clean_train, x_RP_clean_train, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
+    RP_conv_ae_.fit(x_RP_train, x_RP_train, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
 
 
 def pretrain_ts(epochs=1000, batch_size=200):
@@ -97,7 +97,7 @@ def pretrain_ts(epochs=1000, batch_size=200):
     ts_conv1d_ae_ = ts_conv2d_ae
     if exists(cp_path):
         ts_conv1d_ae_ = load_model(cp_path)
-    ts_conv1d_ae_.fit(x_features_series_clean_train, x_features_series_clean_train, batch_size=batch_size, epochs=epochs,
+    ts_conv1d_ae_.fit(x_features_series_train, x_features_series_train, batch_size=batch_size, epochs=epochs,
                       callbacks=[tb, cp])
 
 
@@ -109,13 +109,13 @@ def train_classifier(epochs=100, batch_size=200):
     early_stopping = EarlyStopping(monitor='val_dense_3_loss', patience=patience, verbose=2)
     load_model('./comparison_results/RP_conv_ae_check_point.model')
     load_model('./comparison_results/ts_conv_ae_check_point.model')
-    hist = dual_sae.fit([x_RP_clean_train, x_features_series_clean_train],
-                        [x_RP_clean_train, y_train, x_features_series_clean_train],
+    hist = dual_sae.fit([x_RP_train, x_features_series_train],
+                        [x_RP_train, y_train, x_features_series_train],
                         epochs=epochs,
                         batch_size=batch_size, shuffle=True,
                         validation_data=(
-                            [x_RP_clean_test, x_features_series_clean_test],
-                            [x_RP_clean_test, y_test, x_features_series_clean_test]),
+                            [x_RP_test, x_features_series_test],
+                            [x_RP_test, y_test, x_features_series_test]),
                         callbacks=[early_stopping, tb, cp]
                         )
     #
@@ -126,7 +126,7 @@ def train_classifier(epochs=100, batch_size=200):
 
 def show_confusion_matrix():
     sae = load_model('./comparison_results/sae_check_point.model', custom_objects={'N_CLASS': N_CLASS})
-    pred = sae.predict([x_RP_clean_test, x_features_series_clean_test])
+    pred = sae.predict([x_RP_test, x_features_series_test])
     y_pred = np.argmax(pred[1], axis=1)
     y_true = np.argmax(y_test, axis=1)
     cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)

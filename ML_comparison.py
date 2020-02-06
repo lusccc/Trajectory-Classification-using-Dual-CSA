@@ -9,8 +9,8 @@ from trajectory_extraction import modes_to_use
 ml_models = [ SVC() ]
 
 n_features = len(features_set_1)
-x_train = np.squeeze(x_features_series_clean_train)
-x_test = np.squeeze(x_features_series_clean_test)
+x_train = np.squeeze(x_features_series_train)
+x_test = np.squeeze(x_features_series_test)
 
 # construct data suitable for ml classifier
 # https://stackoverflow.com/questions/57371065/how-to-use-time-series-data-in-classification-in-sklearn

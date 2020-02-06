@@ -70,14 +70,14 @@ def repeat(c, n, scale=True):
 
 if __name__ == '__main__':
     c = generate_center(u, v, G)
-    RP_mats_mf_filtered = np.load('./geolife_features/RP_mats_clean_mf.npy')
+    RP_mats_mf_filtered = np.load('./data/geolife_features/RP_mats.npy')
 
     n_samples = RP_mats_mf_filtered.shape[0]
 
     # !!those data are generated, no real trajectory data involved!!
     scale = True
     centroids = repeat(c, n_samples, scale)
-    np.save('./geolife_features/centroids.npy', centroids)
+    np.save('./data/geolife_features/centroids.npy', centroids)
 
 
 

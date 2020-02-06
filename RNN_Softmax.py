@@ -42,10 +42,10 @@ def train(epochs=100, batch_size=200):
     early_stopping = EarlyStopping(monitor='val_loss', patience=patience, verbose=2)
     callback_list = [model_checkpoint, reduce_lr, early_stopping]
 
-    hist = model.fit(np.squeeze(x_features_series_clean_train), y_train, epochs=epochs,
+    hist = model.fit(np.squeeze(x_features_series_train), y_train, epochs=epochs,
                      batch_size=batch_size, shuffle=True,
                      validation_data=(
-                         [np.squeeze(x_features_series_clean_test)],
+                         [np.squeeze(x_features_series_test)],
                          [y_test]),
                      callbacks=callback_list)
     score = np.argmax(hist.history['val_acc'])
@@ -55,7 +55,7 @@ def train(epochs=100, batch_size=200):
 
 def show_confusion_matrix():
     model = load_model('./comparison_results/rnn_softmax.model', custom_objects={'N_CLASS': N_CLASS})
-    pred = model.predict([np.squeeze(x_features_series_clean_test)])
+    pred = model.predict([np.squeeze(x_features_series_test)])
     y_pred = np.argmax(pred, axis=1)
     y_true = np.argmax(y_test, axis=1)
     cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)

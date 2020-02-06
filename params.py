@@ -5,7 +5,7 @@ from sklearn.preprocessing import MinMaxScaler
 os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
 # if multiple autoencoder exist, say n, each embedding dim will be TOTAL_EMBEDDING_DIM/n
-TOTAL_EMBEDDING_DIM = 48
+TOTAL_EMBEDDING_DIM = 8
 
 # walk, bike, bus, driving, //or train/subway
 modes_to_use = [0, 1, 2, 3, 4]
