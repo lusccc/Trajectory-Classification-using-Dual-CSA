@@ -44,6 +44,6 @@ def TS_CONV2D_AE(input_shape, embedding_dim, n_features, name):
     # conv_ae.add(BatchNormalization())
     conv_ae.add(Activation(activ, name='{}_reconstruction'.format(name)))
 
-    conv_ae.summary()
+    # conv_ae.summary()
     plot_model(conv_ae, to_file='./results/{}_conv2d_ae.png'.format(name), show_shapes=True)
     return conv_ae

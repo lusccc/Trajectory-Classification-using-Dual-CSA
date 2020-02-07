@@ -1,4 +1,6 @@
+import argparse
 import multiprocessing
+from enum import Enum
 
 import numpy as np
 import tables
@@ -6,7 +8,7 @@ from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-from PEDCC import generate_center, u, v, G, repeat
+from PEDCC import PEDDC
 from params import *
 
 from utils import scale_any_shape_data
@@ -33,6 +35,7 @@ def scale_segs_each_features(segs_all_features):
 
 
 def make_dataset():
+    print('make_dataset...')
     RP_mats = np.load('./data/geolife_features/RP_mats.npy')[:, :, :, features_set_1]
     trjs_segs_features = np.load('./data/geolife_features/trjs_segs_features.npy')[:, :, :, features_set_2]
     centroids = np.load('./data/geolife_features/centroids.npy')
@@ -52,21 +55,10 @@ def make_dataset():
     y_train = to_categorical(y_train, num_classes=N_CLASS)
     y_test = to_categorical(y_test, num_classes=N_CLASS)
 
-    n_cpus = multiprocessing.cpu_count()
-    print('n_thread:{}'.format(n_cpus))
-    pool = multiprocessing.Pool()
-    tasks = []
-    tasks.append(pool.apply_async(scale_RP_each_feature, (x_RP_train,)))
-    tasks.append(pool.apply_async(scale_RP_each_feature, (x_RP_test,)))
-    tasks.append(pool.apply_async(scale_segs_each_features, (x_features_series_train,)))
-    tasks.append(pool.apply_async(scale_segs_each_features, (x_features_series_test,)))
     x_RP_train, x_RP_test, \
-    x_features_series_train, x_features_series_test = [t.get() for t in tasks]
-
-    # x_RP_train, x_RP_test, \
-    # x_features_series_train, x_features_series_test, \
-    #     scale_RP_each_feature(x_RP_train), scale_RP_each_feature(x_RP_test), \
-    #     scale_segs_each_features(x_features_series_train), scale_segs_each_features(x_features_series_test), \
+    x_features_series_train, x_features_series_test, \
+    scale_RP_each_feature(x_RP_train), scale_RP_each_feature(x_RP_test), \
+    scale_segs_each_features(x_features_series_train), scale_segs_each_features(x_features_series_test), \
     np.save('./data/geolife_features/x_RP_train.npy', x_RP_train)
     np.save('./data/geolife_features/x_RP_test.npy', x_RP_test)
     np.save('./data/geolife_features/x_features_series_train.npy', x_features_series_train)
@@ -77,26 +69,27 @@ def make_dataset():
     np.save('./data/geolife_features/y_test.npy', y_test)
 
 
-x_RP_train = np.load('./data/geolife_features/x_RP_train.npy', )
-x_RP_test = np.load('./data/geolife_features/x_RP_test.npy', )
-x_features_series_train = np.load('./data/geolife_features/x_features_series_train.npy', )
-x_features_series_test = np.load('./data/geolife_features/x_features_series_test.npy', )
-x_centroids_train = np.load('./data/geolife_features/x_centroids_train.npy', )
-x_centroids_test = np.load('./data/geolife_features/x_centroids_test.npy', )
-y_train = np.load('./data/geolife_features/y_train.npy', )
-y_test = np.load('./data/geolife_features/y_test.npy', )
+class Dataset(object):
+    x_RP_train = np.load('./data/geolife_features/x_RP_train.npy', )
+    x_RP_test = np.load('./data/geolife_features/x_RP_test.npy', )
+    x_features_series_train = np.load('./data/geolife_features/x_features_series_train.npy', )
+    x_features_series_test = np.load('./data/geolife_features/x_features_series_test.npy', )
+    x_centroids_train = np.load('./data/geolife_features/x_centroids_train.npy', )
+    x_centroids_test = np.load('./data/geolife_features/x_centroids_test.npy', )
+    y_train = np.load('./data/geolife_features/y_train.npy', )
+    y_test = np.load('./data/geolife_features/y_test.npy', )
 
 
-def regenerate_PEDCC():
-    c = generate_center(u, v, G)
-    RP_mats_mf_filtered = np.load('./data/geolife_features/RP_mats.npy')
-
-    n_samples = RP_mats_mf_filtered.shape[0]
-
+def regenerate_PEDCC(EMBEDDING_DIM):
+    print('regenerate_PEDCC..EMBEDDING_DIM:{}'.format(EMBEDDING_DIM))
+    pedcc = PEDDC(EMBEDDING_DIM)
+    c = pedcc.generate_center()
+    n_samples = np.load('./data/geolife_features/trjs_segs_features_labels.npy').shape[0]
     # !!those data are generated, no real trajectory data involved!!
     scale = True
-    centroids = repeat(c, n_samples, scale)
+    centroids = pedcc.repeat(c, n_samples, scale)
     np.save('./data/geolife_features/centroids.npy', centroids)
+    print('centroids shape:{}'.format(centroids.shape))
 
     x_centroids_train, x_centroids_test = train_test_split(centroids, test_size=0.20, random_state=7, shuffle=True)
     np.save('./data/geolife_features/x_centroids_train.npy', x_centroids_train)
@@ -104,6 +97,11 @@ def regenerate_PEDCC():
 
 
 if __name__ == '__main__':
-    make_dataset()
-    # regenerate_PEDCC()
-    print()
+    parser = argparse.ArgumentParser(description='dataset')
+    parser.add_argument('--DIM', type=int)
+    args = parser.parse_args()
+    DIM = args.DIM
+    if DIM:
+        regenerate_PEDCC(DIM)
+    else:
+        make_dataset()

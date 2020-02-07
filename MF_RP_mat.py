@@ -87,9 +87,6 @@ def sign(m, n):
 
 
 if __name__ == '__main__':
-    n_cpus = multiprocessing.cpu_count()
-    print('n_thread:{}'.format(n_cpus))
-    pool = multiprocessing.Pool(processes=1)
 
     labels = np.load('./data/geolife_features/trjs_segs_features_labels.npy')
 
@@ -100,25 +97,17 @@ if __name__ == '__main__':
     trjs_segs_features = np.reshape(trjs_segs_features, [trjs_segs_features.shape[0], trjs_segs_features.shape[2],
                                                          trjs_segs_features.shape[3]])
 
-    tasks = []
-    for i in range(0, n_features):
-        single_feature_segs = trjs_segs_features[:, :, i]  # (n, 48)
-        tasks.append(pool.apply_async(gen_multiple_RP_mats,
-                                      (single_feature_segs, False)))
-    res = np.array([np.expand_dims(t.get(), axis=3) for t in tasks])
-    print(np.shape(res))
-    features_RP_mats = np.concatenate(res, axis=3)
 
-    # for i in range(n_features):
-    #     single_feature_segs = trjs_segs_features[:, :, i]  # (n, 48)
-    #     # generate RP mat for each seg
-    #     feature_RP_mats = gen_multiple_RP_mats(single_feature_segs[:], scale=False)
-    #     feature_RP_mats = np.expand_dims(feature_RP_mats, axis=3)
-    #     features_RP_mats.append(feature_RP_mats)
-    #     max = np.max(feature_RP_mats)
-    #     min = np.min(feature_RP_mats)
-    #     print('RP mat value range:', min, max)
-    # features_RP_mats = np.concatenate(features_RP_mats, axis=3)
+    for i in features_set_1:
+        single_feature_segs = trjs_segs_features[:, :, i]  # (n, 48)
+        # generate RP mat for each seg
+        feature_RP_mats = gen_multiple_RP_mats(single_feature_segs[:], scale=False)
+        feature_RP_mats = np.expand_dims(feature_RP_mats, axis=3)
+        features_RP_mats.append(feature_RP_mats)
+        max = np.max(feature_RP_mats)
+        min = np.min(feature_RP_mats)
+        print('RP mat value range:', min, max)
+    features_RP_mats = np.concatenate(features_RP_mats, axis=3)
 
     print(' ####\nfeatures_RP_mats.shape:{}'.format(features_RP_mats.shape))
     np.save('./data/geolife_features/RP_mats.npy', features_RP_mats)

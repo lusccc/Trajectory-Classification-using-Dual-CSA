@@ -42,7 +42,7 @@ def CONV2D_AE(input_shape, embedding_dim, n_features, name):
     # conv_ae.add(BatchNormalization())
     conv_ae.add(Activation(activ, name='{}_reconstruction'.format(name)))
 
-    conv_ae.summary()
+    # conv_ae.summary()
     plot_model(conv_ae, to_file='./results/{}_conv2d_ae.png'.format(name), show_shapes=True)
     return conv_ae
 
@@ -69,6 +69,6 @@ def CAE(embedding_dim, n_features, name, input_shape=(28, 28, 1), filters=[32, 6
     model.add(Conv2DTranspose(filters[0], 5, strides=2, padding='same', activation='relu', name='deconv2'))
 
     model.add(Conv2DTranspose(input_shape[2], 5, strides=2, padding='same', name='{}_reconstruction'.format(name)))
-    model.summary()
+    # model.summary()
     plot_model(model, to_file='./results/{}_conv2d_ae.png'.format(name), show_shapes=True)
     return model
