@@ -36,8 +36,8 @@ def scale_segs_each_features(segs_all_features):
 
 def make_dataset():
     print('make_dataset...')
-    RP_mats = np.load('./data/geolife_features/RP_mats.npy')[:, :, :, features_set_1]
-    trjs_segs_features = np.load('./data/geolife_features/trjs_segs_features.npy')[:, :, :, features_set_2]
+    RP_mats = np.load('./data/geolife_features/RP_mats.npy')
+    trjs_segs_features = np.load('./data/geolife_features/trjs_segs_features.npy')
     centroids = np.load('./data/geolife_features/centroids.npy')
     labels = np.load('./data/geolife_features/trjs_segs_features_labels.npy')
 
@@ -78,6 +78,8 @@ class Dataset(object):
     x_centroids_test = np.load('./data/geolife_features/x_centroids_test.npy', )
     y_train = np.load('./data/geolife_features/y_train.npy', )
     y_test = np.load('./data/geolife_features/y_test.npy', )
+    print('centroids shape:{}'.format(x_centroids_train.shape))
+
 
 
 def regenerate_PEDCC(EMBEDDING_DIM):

@@ -220,9 +220,16 @@ def visualize_centroids():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DSAE')
     parser.add_argument('--results_path', default='results', type=str)
+    parser.add_argument('--alpha', default=1, type=int)
+    parser.add_argument('--beta', default=3, type=int)
+    parser.add_argument('--gamma', default=1, type=int)
+
     args = parser.parse_args()
     results_path = args.results_path
-    print('results_path:{}'.format(results_path))
+    alpha = args.alpha
+    beta = args.beta
+    gamma = args.gamma
+    print('results_path:{} ,loss weight:{},{},{}'.format(results_path, alpha, beta, gamma))
     pathlib.Path(os.path.join(results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
 
     x_RP_train = Dataset.x_RP_train
@@ -237,20 +244,20 @@ if __name__ == '__main__':
     EMB_DIM = x_centroids_train.shape[2]
 
     epochs = 30
-    batch_size = 500
+    batch_size = 600
     """ note: each autoencoder has same embedding,
      embedding will be concated to match EMB_DIM, 
     aka. centroids has dim EMB_DIM"""
     n_ae = 2  # num of ae
     each_embedding_dim = int(EMB_DIM / n_ae)
-    loss_weights = [1, 3, 1]
+    loss_weights = [alpha, beta, gamma]
     patience = 25
 
     RP_conv2d_ae = RP_Conv2D_AE()
     ts_conv2d_ae = ts_Conv2d_AE()
     dual_sae, dual_encoder = dual_SAE()
-    # pretrain_RP(1, batch_size)
-    # pretrain_ts(1, batch_size)
+    # pretrain_RP(100, batch_size)
+    # pretrain_ts(350, batch_size)
     visualize_centroids()
     visualize_dual_ae_embedding()
     train_classifier(3000, batch_size)

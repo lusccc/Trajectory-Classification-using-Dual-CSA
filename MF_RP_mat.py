@@ -1,3 +1,4 @@
+import argparse
 import multiprocessing
 from math import cos, pi
 
@@ -17,7 +18,7 @@ METRIC = "euclidean"
 EPS = 0.05  # Fixed recurrence threshold
 
 
-def gen_multiple_RP_mats(series, scale=False):
+def gen_multiple_RP_mats(series, scale=False, dim=DIM, tau=TAU):
     """
     generate a RP mat for each series
     """
@@ -26,7 +27,7 @@ def gen_multiple_RP_mats(series, scale=False):
 
     print('calc distance_mats ....')
     # each series generates n_vectors phase space phase_vectors
-    phase_vectorss = _trajectories(series, dimension=DIM, time_delay=TAU)
+    phase_vectorss = _trajectories(series, dimension=dim, time_delay=tau)
     n_vectors = phase_vectorss.shape[1]
     # calc distances mats, 1 mat for each series.
     # shape:(n_samples, n_vectors, n_vectors)
@@ -88,6 +89,17 @@ def sign(m, n):
 
 if __name__ == '__main__':
 
+    parser = argparse.ArgumentParser(description='RP_mat')
+    parser.add_argument('--dim', default=DIM, type=int)
+    parser.add_argument('--tau', default=TAU, type=int)
+
+    args = parser.parse_args()
+    dim = args.dim
+    tau = args.tau
+    print('dim:{} tau:{}'.format(dim, tau))
+
+
+
     labels = np.load('./data/geolife_features/trjs_segs_features_labels.npy')
 
     trjs_segs_features = np.load('./data/geolife_features/trjs_segs_features.npy')
@@ -98,10 +110,10 @@ if __name__ == '__main__':
                                                          trjs_segs_features.shape[3]])
 
 
-    for i in features_set_1:
+    for i in range(n_features):
         single_feature_segs = trjs_segs_features[:, :, i]  # (n, 48)
         # generate RP mat for each seg
-        feature_RP_mats = gen_multiple_RP_mats(single_feature_segs[:], scale=False)
+        feature_RP_mats = gen_multiple_RP_mats(single_feature_segs[:], scale=False, dim=dim, tau=tau)
         feature_RP_mats = np.expand_dims(feature_RP_mats, axis=3)
         features_RP_mats.append(feature_RP_mats)
         max = np.max(feature_RP_mats)
