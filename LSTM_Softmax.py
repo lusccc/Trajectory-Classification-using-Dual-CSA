@@ -7,7 +7,7 @@ from keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, classification_report
 
 from dataset import *
-from params import MAX_SEGMENT_SIZE, features_set_1
+from params import MAX_SEGMENT_SIZE, FEATURES_SET_1
 from trajectory_extraction import modes_to_use
 
 
@@ -60,7 +60,7 @@ def show_confusion_matrix():
 
 
 if __name__ == "__main__":
-    model = LSTM_Softmax(MAX_SEGMENT_SIZE, 32, len(features_set_1), N_CLASS)
+    model = LSTM_Softmax(MAX_SEGMENT_SIZE, 32, len(FEATURES_SET_1), N_CLASS)
     patience = 35
     train(3000)
     show_confusion_matrix()

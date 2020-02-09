@@ -6,7 +6,7 @@ import numpy as np
 from numpy.linalg import norm
 from pyts.image.recurrence import _trajectories
 
-from params import DIM, TAU, features_set_1
+from params import DIM, TAU, FEATURES_SET_1
 from utils import scale_any_shape_data
 
 #  Settings for the embedding
@@ -92,13 +92,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='RP_mat')
     parser.add_argument('--dim', default=DIM, type=int)
     parser.add_argument('--tau', default=TAU, type=int)
+    parser.add_argument('--feature_set', type=str)
 
     args = parser.parse_args()
     dim = args.dim
     tau = args.tau
     print('dim:{} tau:{}'.format(dim, tau))
-
-
+    if args.feature_set is None:
+        feature_set = FEATURES_SET_1
+    else:
+        feature_set = [int(item) for item in args.feature_set.split(',')]
+    print('feature_set:{}'.format(feature_set))
 
     labels = np.load('./data/geolife_features/trjs_segs_features_labels.npy')
 

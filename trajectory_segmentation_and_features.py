@@ -1,3 +1,4 @@
+import argparse
 import multiprocessing
 
 import numpy as np
@@ -296,6 +297,15 @@ def calc_trjs_segs_noise_features(trjs_segs, trjs_segs_labels, valid_trjs_segs):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='TRJ_SEG_FEATURE')
+    parser.add_argument('--feature_set', type=str)
+    args = parser.parse_args()
+    if args.feature_set is None:
+        feature_set = FEATURES_SET_2
+    else:
+        feature_set = [int(item) for item in args.feature_set.split(',')]
+    print('feature_set:{}'.format(feature_set))
+
     n_cpus = multiprocessing.cpu_count()
     print('n_thread:{}'.format(n_cpus))
     pool = multiprocessing.Pool(processes=n_cpus)
@@ -320,5 +330,5 @@ if __name__ == '__main__':
     trjs_segs_features, trjs_segs_features_labels = calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_function)
 
     print('saving files...')
-    np.save('./data/geolife_features/trjs_segs_features.npy', trjs_segs_features[:, :, :, features_set_2])
+    np.save('./data/geolife_features/trjs_segs_features.npy', trjs_segs_features[:, :, :, feature_set])
     np.save('./data/geolife_features/trjs_segs_features_labels.npy', trjs_segs_features_labels)

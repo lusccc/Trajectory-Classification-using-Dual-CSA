@@ -2,13 +2,13 @@ from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.svm import SVC
 
 from dataset import *
-from params import features_set_1
+from params import FEATURES_SET_1
 from trajectory_extraction import modes_to_use
 
 #RandomForestClassifier(),SVC(),KNeighborsClassifier(),   MLPClassifier(), DecisionTreeClassifier(),
 ml_models = [ SVC() ]
 
-n_features = len(features_set_1)
+n_features = len(FEATURES_SET_1)
 x_train = np.squeeze(x_features_series_train)
 x_test = np.squeeze(x_features_series_test)
 

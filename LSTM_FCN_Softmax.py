@@ -10,7 +10,7 @@ from keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, classification_report
 
 from dataset import *
-from params import features_set_1, MAX_SEGMENT_SIZE
+from params import FEATURES_SET_1, MAX_SEGMENT_SIZE
 from trajectory_extraction import modes_to_use
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
@@ -90,7 +90,7 @@ def show_confusion_matrix():
 
 if __name__ == "__main__":
 
-    model = LSTM_FCN_Softmax(MAX_SEGMENT_SIZE, 32, len(features_set_1), N_CLASS)
+    model = LSTM_FCN_Softmax(MAX_SEGMENT_SIZE, 32, len(FEATURES_SET_1), N_CLASS)
     patience = 35
     train(3000)
     show_confusion_matrix()

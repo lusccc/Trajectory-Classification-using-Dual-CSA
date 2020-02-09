@@ -1,12 +1,9 @@
-import tables
-import numpy as np
+import argparse
 
 
-def gen_mf_RP_mats(series, batch_size=10, scale=False):
-    n = len(series)
-    for i in range(0, n, batch_size):
-        print(i, i + batch_size)
-        print(series[i:i+batch_size])
-
-a = np.array(range(125))
-gen_mf_RP_mats(a)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='TRJ_SEG_FEATURE')
+    parser.add_argument('--feature_set_2',  type=str)
+    args = parser.parse_args()
+    print(args.feature_set_2)
+    feature_set = [int(item) for item in args.feature_set_2.split(',')]

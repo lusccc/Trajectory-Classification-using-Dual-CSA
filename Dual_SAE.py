@@ -18,11 +18,12 @@ from sklearn.metrics import confusion_matrix, classification_report
 from CONV2D_AE import CONV2D_AE
 from TS_CONV2D_AE import TS_CONV2D_AE
 from dataset import *
-from params import  MULTI_GPU
+from params import MULTI_GPU
 from trajectory_extraction import modes_to_use
 from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 from utils import visualizeData
 from params import *
+
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
@@ -137,7 +138,7 @@ def pretrain_ts(epochs=1000, batch_size=200):
                       callbacks=[tb, cp])
 
 
-def train_classifier(epochs=100, batch_size=200):
+def train_classifier(pretrained=True, epochs=100, batch_size=200):
     print('train_classifier...')
     factor = 1. / np.cbrt(2)
     cp = ModelCheckpoint(os.path.join(results_path, 'sae_check_point.model'), monitor='val_lambda_1_acc',
@@ -147,8 +148,10 @@ def train_classifier(epochs=100, batch_size=200):
     # reduce_lr = ReduceLROnPlateau(monitor='loss', patience=100, mode='auto',
     #                               factor=factor, cooldown=0, min_lr=1e-4, verbose=2)
     visulazation_callback = SAE_embedding_visualization_callback(os.path.join(results_path, 'sae_cp_{epoch}.h5'))
-    load_model(os.path.join(results_path, 'RP_conv_ae_check_point.model'))
-    load_model(os.path.join(results_path, 'ts_conv_ae_check_point.model'))
+    if pretrained:
+        print('loading trained dual ae...')
+        load_model(os.path.join(results_path, 'RP_conv_ae_check_point.model'))
+        load_model(os.path.join(results_path, 'ts_conv_ae_check_point.model'))
     hist = dual_sae.fit([x_RP_train, x_centroids_train, x_features_series_train],
                         [x_RP_train, y_train, x_features_series_train],
                         epochs=epochs,
@@ -156,7 +159,7 @@ def train_classifier(epochs=100, batch_size=200):
                         validation_data=(
                             [x_RP_test, x_centroids_test, x_features_series_test],
                             [x_RP_test, y_test, x_features_series_test]),
-                        callbacks=[early_stopping, tb, cp, visulazation_callback, ]
+                        callbacks=[early_stopping, tb, cp, visulazation_callback, ],
                         )
     #
     score = np.argmax(hist.history['val_lambda_1_acc'])
@@ -173,11 +176,13 @@ class SAE_embedding_visualization_callback(ModelCheckpoint):
         if epoch % 4 == 0:
             embedding = dual_encoder.predict([x_RP_test, x_centroids_test, x_features_series_test])
             y_true = np.argmax(y_test, axis=1)
-            visualizeData(embedding, y_true, N_CLASS, os.path.join(results_path, 'visualization', 'sae_embedding_epoch{}.png'.format(epoch)))
+            visualizeData(embedding, y_true, N_CLASS,
+                          os.path.join(results_path, 'visualization', 'sae_embedding_epoch{}.png'.format(epoch)))
 
 
 def show_confusion_matrix():
-    sae = load_model(os.path.join(results_path, 'sae_check_point.model'), custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
+    sae = load_model(os.path.join(results_path, 'sae_check_point.model'),
+                     custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
     pred = sae.predict([x_RP_test, x_centroids_test, x_features_series_test])
     y_pred = np.argmax(pred[1], axis=1)
     y_true = np.argmax(y_test, axis=1)
@@ -199,7 +204,8 @@ def show_confusion_matrix():
 
 
 def visualize_sae_embedding():
-    sae = load_model(os.path.join(results_path, 'sae_check_point.model'), custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
+    sae = load_model(os.path.join(results_path, 'sae_check_point.model'),
+                     custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
     embedding = dual_encoder.predict([x_RP_test, x_centroids_test, x_features_series_test])
     y_true = np.argmax(y_test, axis=1)
     visualizeData(embedding, y_true, N_CLASS, os.path.join(results_path, 'visualization', 'best.png'))
@@ -214,22 +220,27 @@ def visualize_dual_ae_embedding():
 
 
 def visualize_centroids():
-    visualizeData(x_centroids_test[0], modes_to_use, N_CLASS, os.path.join(results_path, 'visualization', 'centroids_visualization.png'))
+    visualizeData(x_centroids_test[0], modes_to_use, N_CLASS,
+                  os.path.join(results_path, 'visualization', 'centroids_visualization.png'))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DSAE')
-    parser.add_argument('--results_path', default='results', type=str)
-    parser.add_argument('--alpha', default=1, type=int)
-    parser.add_argument('--beta', default=3, type=int)
-    parser.add_argument('--gamma', default=1, type=int)
-
+    parser.add_argument('--results_path', default='results/default', type=str)
+    parser.add_argument('--alpha', default=ALPHA, type=float)
+    parser.add_argument('--beta', default=BETA, type=float)
+    parser.add_argument('--gamma', default=GAMMA, type=float)
+    parser.add_argument('--no_pre', default=False, type=bool)
+    parser.add_argument('--no_joint', default=False, type=bool)
     args = parser.parse_args()
     results_path = args.results_path
     alpha = args.alpha
     beta = args.beta
     gamma = args.gamma
-    print('results_path:{} ,loss weight:{},{},{}'.format(results_path, alpha, beta, gamma))
+    no_pretrain = args.no_pre
+    no_joint_train = args.no_joint
+    print('results_path:{} , loss weight:{},{},{}, pretrain:{}, joint_train:{}'.format(results_path, alpha, beta, gamma,
+                                                                                       no_pretrain, no_joint_train))
     pathlib.Path(os.path.join(results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
 
     x_RP_train = Dataset.x_RP_train
@@ -240,26 +251,35 @@ if __name__ == '__main__':
     x_centroids_test = Dataset.x_centroids_test
     y_train = Dataset.y_train
     y_test = Dataset.y_test
-    
+
     EMB_DIM = x_centroids_train.shape[2]
 
     epochs = 30
     batch_size = 600
     """ note: each autoencoder has same embedding,
      embedding will be concated to match EMB_DIM, 
-    aka. centroids has dim EMB_DIM"""
+    i.e. centroids has dim EMB_DIM"""
     n_ae = 2  # num of ae
     each_embedding_dim = int(EMB_DIM / n_ae)
-    loss_weights = [alpha, beta, gamma]
-    patience = 25
+    patience = 45
 
+    if no_joint_train:
+        loss_weights = [0, 1, 0]
+    else:
+        loss_weights = [alpha, beta, gamma]
     RP_conv2d_ae = RP_Conv2D_AE()
     ts_conv2d_ae = ts_Conv2d_AE()
     dual_sae, dual_encoder = dual_SAE()
-    # pretrain_RP(100, batch_size)
-    # pretrain_ts(350, batch_size)
+
+    # means only train classifier using default loss_weight
+    if no_pretrain or no_joint_train:
+        train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
+    else:
+        pretrain_RP(100, batch_size)
+        pretrain_ts(350, batch_size)
+        train_classifier(pretrained=True, epochs=3000, batch_size=batch_size)
+
     visualize_centroids()
     visualize_dual_ae_embedding()
-    train_classifier(3000, batch_size)
     show_confusion_matrix()
     visualize_sae_embedding()
