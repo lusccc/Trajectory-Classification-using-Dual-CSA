@@ -28,6 +28,14 @@ from params import *
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
+def log(info):
+    with open(os.path.join(results_path, 'log.txt'), 'a') as f:
+        print(info)
+        print(info, file=f)
+
+
+
+
 def student_t(z, u, alpha=1.):
     """
 student t-distribution, as same as used in t-SNE algorithm.
@@ -97,22 +105,14 @@ def dual_SAE():
 
 
 """-----------train---------------"""
-tb = TensorBoard(log_dir='./logs',  # log 目录
-                 histogram_freq=0,  # 按照何等频率（epoch）来计算直方图，0为不计算
-                 #                  batch_size=32,     # 用多大量的数据计算直方图
-                 write_graph=True,  # 是否存储网络结构图
-                 write_grads=True,  # 是否可视化梯度直方图
-                 write_images=True,  # 是否可视化参数
-                 embeddings_freq=0,
-                 embeddings_layer_names=None,
-                 embeddings_metadata=None)
+
 
 
 def pretrain_RP(epochs=1000, batch_size=200):
     """
     pretrain is unsupervised, all data could use to train
     """
-    print('pretrain_RP')
+    log('pretrain_RP')
     cp_path = os.path.join(results_path, 'RP_conv_ae_check_point.model')
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
@@ -126,7 +126,7 @@ def pretrain_ts(epochs=1000, batch_size=200):
     """
     pretrain is unsupervised, all data could use to train
     """
-    print('pretrain_ts')
+    log('pretrain_ts')
     cp_path = os.path.join(results_path, 'ts_conv_ae_check_point.model')
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
@@ -139,7 +139,7 @@ def pretrain_ts(epochs=1000, batch_size=200):
 
 
 def train_classifier(pretrained=True, epochs=100, batch_size=200):
-    print('train_classifier...')
+    log('train_classifier...')
     factor = 1. / np.cbrt(2)
     cp = ModelCheckpoint(os.path.join(results_path, 'sae_check_point.model'), monitor='val_lambda_1_acc',
                          verbose=1,
@@ -149,7 +149,7 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200):
     #                               factor=factor, cooldown=0, min_lr=1e-4, verbose=2)
     visulazation_callback = SAE_embedding_visualization_callback(os.path.join(results_path, 'sae_cp_{epoch}.h5'))
     if pretrained:
-        print('loading trained dual ae...')
+        log('loading trained dual ae...')
         load_model(os.path.join(results_path, 'RP_conv_ae_check_point.model'))
         load_model(os.path.join(results_path, 'ts_conv_ae_check_point.model'))
     hist = dual_sae.fit([x_RP_train, x_centroids_train, x_features_series_train],
@@ -163,7 +163,7 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200):
                         )
     #
     score = np.argmax(hist.history['val_lambda_1_acc'])
-    print('the optimal epoch size: {}, the value of high accuracy {}'.format(hist.epoch[score],
+    log('the optimal epoch size: {}, the value of high accuracy {}'.format(hist.epoch[score],
                                                                              np.max(hist.history['val_lambda_1_acc'])))
 
 
@@ -187,6 +187,7 @@ def show_confusion_matrix():
     y_pred = np.argmax(pred[1], axis=1)
     y_true = np.argmax(y_test, axis=1)
     cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)
+    log(cm)
     with open(os.path.join(results_path, 'confusion_matrix.txt'), 'w') as f:
         print(cm, file=f)
     f, ax = plt.subplots()
@@ -198,7 +199,7 @@ def show_confusion_matrix():
 
     re = classification_report(y_true, y_pred, target_names=['walk', 'bike', 'bus', 'driving', 'train/subway'],
                                digits=5)
-    print(re)
+    log(re)
     with open(os.path.join(results_path, 'classification_report.txt'), 'w') as f:
         print(re, file=f)
 
@@ -232,6 +233,10 @@ if __name__ == '__main__':
     parser.add_argument('--gamma', default=GAMMA, type=float)
     parser.add_argument('--no_pre', default=False, type=bool)
     parser.add_argument('--no_joint', default=False, type=bool)
+    parser.add_argument('--epoch1', default=100, type=int)
+    parser.add_argument('--epoch2', default=350, type=int)
+
+
     args = parser.parse_args()
     results_path = args.results_path
     alpha = args.alpha
@@ -239,7 +244,9 @@ if __name__ == '__main__':
     gamma = args.gamma
     no_pretrain = args.no_pre
     no_joint_train = args.no_joint
-    print('results_path:{} , loss weight:{},{},{}, pretrain:{}, joint_train:{}'.format(results_path, alpha, beta, gamma,
+    epoch1 = args.epoch1
+    epoch2 = args.epoch2
+    log('results_path:{} , loss weight:{},{},{}, no_pretrain:{}, no_joint_train:{}'.format(results_path, alpha, beta, gamma,
                                                                                        no_pretrain, no_joint_train))
     pathlib.Path(os.path.join(results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
 
@@ -261,7 +268,7 @@ if __name__ == '__main__':
     i.e. centroids has dim EMB_DIM"""
     n_ae = 2  # num of ae
     each_embedding_dim = int(EMB_DIM / n_ae)
-    patience = 45
+    patience = 100
 
     if no_joint_train:
         loss_weights = [0, 1, 0]
@@ -270,13 +277,22 @@ if __name__ == '__main__':
     RP_conv2d_ae = RP_Conv2D_AE()
     ts_conv2d_ae = ts_Conv2d_AE()
     dual_sae, dual_encoder = dual_SAE()
+    tb = TensorBoard(log_dir=os.path.join(results_path, 'tensorflow_logs'),  # log 目录
+                     histogram_freq=0,  # 按照何等频率（epoch）来计算直方图，0为不计算
+                     #                  batch_size=32,     # 用多大量的数据计算直方图
+                     write_graph=True,  # 是否存储网络结构图
+                     write_grads=True,  # 是否可视化梯度直方图
+                     write_images=True,  # 是否可视化参数
+                     embeddings_freq=0,
+                     embeddings_layer_names=None,
+                     embeddings_metadata=None)
 
     # means only train classifier using default loss_weight
     if no_pretrain or no_joint_train:
         train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
     else:
-        pretrain_RP(100, batch_size)
-        pretrain_ts(350, batch_size)
+        # pretrain_RP(epoch1, batch_size)
+        # pretrain_ts(epoch2, batch_size)
         train_classifier(pretrained=True, epochs=3000, batch_size=batch_size)
 
     visualize_centroids()
