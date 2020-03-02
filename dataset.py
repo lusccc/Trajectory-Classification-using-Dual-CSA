@@ -98,6 +98,8 @@ def regenerate_PEDCC(EMBEDDING_DIM):
     np.save('./data/geolife_features/x_centroids_test.npy', x_centroids_test)
 
 
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='dataset')
     parser.add_argument('--DIM', type=int)

@@ -7,7 +7,7 @@ from sklearn.preprocessing import MinMaxScaler
 # if multiple autoencoder exist, say n, each embedding dim will be TOTAL_EMBEDDING_DIM/n
 TOTAL_EMBEDDING_DIM = 96
 
-# walk, bike, bus, driving, //or train/subway
+#             walk, bike, bus, driving, //or train/subway
 modes_to_use = [0, 1, 2, 3, 4]
 N_CLASS = len(modes_to_use)
 
