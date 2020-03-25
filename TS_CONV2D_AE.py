@@ -1,10 +1,12 @@
+import os
+
 from keras import Sequential
 from keras.layers import Conv2D, Flatten, MaxPooling2D, Reshape, UpSampling2D, Conv2DTranspose, Activation
 from keras.layers import Dense
 from keras.utils import plot_model
 
 
-def TS_CONV2D_AE(input_shape, embedding_dim, n_features, name):
+def TS_CONV2D_AE(input_shape, embedding_dim, n_features, name, results_path):
     """
     time series conv2d ae
     """
@@ -45,5 +47,5 @@ def TS_CONV2D_AE(input_shape, embedding_dim, n_features, name):
     conv_ae.add(Activation(activ, name='{}_reconstruction'.format(name)))
 
     # conv_ae.summary()
-    plot_model(conv_ae, to_file='./results/{}_conv2d_ae.png'.format(name), show_shapes=True)
+    plot_model(conv_ae, to_file=os.path.join(results_path,'{}_conv2d_ae.png'.format(name)), show_shapes=True)
     return conv_ae

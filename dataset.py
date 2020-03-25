@@ -4,6 +4,7 @@ from enum import Enum
 
 import numpy as np
 # from keras.utils import to_categorical
+from keras.utils import to_categorical
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
@@ -51,8 +52,8 @@ def make_dataset():
         labels,
         test_size=0.20, random_state=7, shuffle=True
     )
-    # y_train = to_categorical(y_train, num_classes=N_CLASS)
-    # y_test = to_categorical(y_test, num_classes=N_CLASS)
+    y_train = to_categorical(y_train, num_classes=N_CLASS)
+    y_test = to_categorical(y_test, num_classes=N_CLASS)
 
     x_RP_train, x_RP_test, \
     x_features_series_train, x_features_series_test = \
@@ -68,23 +69,24 @@ def make_dataset():
     np.save('./data/geolife_features/y_test.npy', y_test)
 
 
-# class Dataset(object):
-#     x_RP_train = np.load('./data/geolife_features/x_RP_train.npy', )
-#     x_RP_test = np.load('./data/geolife_features/x_RP_test.npy', )
-#     x_features_series_train = np.load('./data/geolife_features/x_features_series_train.npy', )
-#     x_features_series_test = np.load('./data/geolife_features/x_features_series_test.npy', )
-#     x_centroids_train = np.load('./data/geolife_features/x_centroids_train.npy', )
-#     x_centroids_test = np.load('./data/geolife_features/x_centroids_test.npy', )
-#     y_train = np.load('./data/geolife_features/y_train.npy', )
-#     y_test = np.load('./data/geolife_features/y_test.npy', )
-#     print('centroids shape:{}'.format(x_centroids_train.shape))
+class Dataset(object):
+    x_RP_train = np.load('./data/geolife_features/x_RP_train.npy', )
+    x_RP_test = np.load('./data/geolife_features/x_RP_test.npy', )
+    x_features_series_train = np.load('./data/geolife_features/x_features_series_train.npy', )
+    x_features_series_test = np.load('./data/geolife_features/x_features_series_test.npy', )
+    x_centroids_train = np.load('./data/geolife_features/x_centroids_train.npy', )
+    x_centroids_test = np.load('./data/geolife_features/x_centroids_test.npy', )
+    y_train = np.load('./data/geolife_features/y_train.npy', )
+    y_test = np.load('./data/geolife_features/y_test.npy', )
+    print('centroids shape:{}'.format(x_centroids_train.shape))
 
 def make_dataset_for_clustering():
-    print('make_dataset...')
+    print('make_dataset_for_clustering...')
     RP_mats = np.load('./data/geolife_features/RP_mats.npy')
-    trjs_segs_features = np.load('./data/geolife_features/trjs_segs_features.npy')
-    centroids = np.load('./data/geolife_features/centroids.npy')
     labels = np.load('./data/geolife_features/trjs_segs_features_labels.npy')
+    x_RP_scaled = scale_RP_each_feature(RP_mats)
+    np.save('./data/geolife_features/x_RP_scaled.npy', x_RP_scaled)
+    np.save('./data/geolife_features/y_RP.npy', labels)
 
 
 def regenerate_PEDCC(EMBEDDING_DIM):
@@ -114,3 +116,4 @@ if __name__ == '__main__':
         regenerate_PEDCC(DIM)
     else:
         make_dataset()
+        # make_dataset_for_clustering()

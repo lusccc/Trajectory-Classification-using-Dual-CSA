@@ -8,7 +8,7 @@ from sklearn.preprocessing import MinMaxScaler
 TOTAL_EMBEDDING_DIM = 96
 
 # walk, bike, bus, driving, //or train/subway
-modes_to_use = [0, 1, 3]
+modes_to_use = [0, 1, 2, 3, 4]
 N_CLASS = len(modes_to_use)
 
 MAX_SEGMENT_SIZE = 184
@@ -30,8 +30,8 @@ FILTER_SEGS = False
 
 # 0        1     2  3  4  5  6   7    8  9
 # delta_t, hour, d, v, a, h, hc, hcr, s, tn
-FEATURES_SET_1 = [3, 4, 7]
-FEATURES_SET_2 = [3, 4, 7]
+FEATURES_SET_1 = [3, 4, 7, 8, 9]
+FEATURES_SET_2 = [3, 4, 7, 8, 9]
 # loss wight
 ALPHA = 1
 BETA = 4

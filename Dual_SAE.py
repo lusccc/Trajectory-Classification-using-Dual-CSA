@@ -18,9 +18,6 @@ from sklearn.metrics import confusion_matrix, classification_report
 from CONV2D_AE import CONV2D_AE
 from TS_CONV2D_AE import TS_CONV2D_AE
 from dataset import *
-from params import MULTI_GPU
-from trajectory_extraction import modes_to_use
-from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 from utils import visualizeData
 from params import *
 
@@ -60,7 +57,7 @@ def RP_Conv2D_AE():
     """ -----RP_conv_ae------"""
     RP_mat_size = x_RP_train.shape[1]  # 40
     n_features = x_RP_train.shape[3]
-    RP_conv_ae = CONV2D_AE((RP_mat_size, RP_mat_size, n_features), each_embedding_dim, n_features, 'RP')
+    RP_conv_ae = CONV2D_AE((RP_mat_size, RP_mat_size, n_features), each_embedding_dim, n_features, 'RP', results_path)
     if MULTI_GPU:
         RP_conv_ae = multi_gpu_model(RP_conv_ae, gpus=2)
     RP_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
@@ -69,7 +66,7 @@ def RP_Conv2D_AE():
 
 def ts_Conv2d_AE():
     n_features = x_features_series_train.shape[3]
-    ts_conv_ae = TS_CONV2D_AE((1, MAX_SEGMENT_SIZE, n_features), each_embedding_dim, n_features, 'ts')
+    ts_conv_ae = TS_CONV2D_AE((1, MAX_SEGMENT_SIZE, n_features), each_embedding_dim, n_features, 'ts', results_path)
     if MULTI_GPU:
         ts_conv_ae = multi_gpu_model(ts_conv_ae, gpus=2)
     ts_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
@@ -141,7 +138,8 @@ def pretrain_ts(epochs=1000, batch_size=200):
 def train_classifier(pretrained=True, epochs=100, batch_size=200):
     log('train_classifier...')
     factor = 1. / np.cbrt(2)
-    cp = ModelCheckpoint(os.path.join(results_path, 'sae_check_point.model'), monitor='val_lambda_1_acc',
+    cp_path = os.path.join(results_path, 'sae_check_point.model')
+    cp = ModelCheckpoint(cp_path, monitor='val_lambda_1_accuracy',
                          verbose=1,
                          save_best_only=True, mode='max')
     early_stopping = EarlyStopping(monitor='val_lambda_1_loss', patience=patience, verbose=2)
@@ -152,6 +150,8 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200):
         log('loading trained dual ae...')
         load_model(os.path.join(results_path, 'RP_conv_ae_check_point.model'))
         load_model(os.path.join(results_path, 'ts_conv_ae_check_point.model'))
+    if exists(cp_path):
+        load_model(cp_path)
     hist = dual_sae.fit([x_RP_train, x_centroids_train, x_features_series_train],
                         [x_RP_train, y_train, x_features_series_train],
                         epochs=epochs,
@@ -246,9 +246,9 @@ if __name__ == '__main__':
     no_joint_train = args.no_joint
     epoch1 = args.epoch1
     epoch2 = args.epoch2
+    pathlib.Path(os.path.join(results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
     log('results_path:{} , loss weight:{},{},{}, no_pretrain:{}, no_joint_train:{}'.format(results_path, alpha, beta, gamma,
                                                                                        no_pretrain, no_joint_train))
-    pathlib.Path(os.path.join(results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
 
     x_RP_train = Dataset.x_RP_train
     x_RP_test = Dataset.x_RP_test

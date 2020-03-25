@@ -330,5 +330,7 @@ if __name__ == '__main__':
     trjs_segs_features, trjs_segs_features_labels = calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_function)
 
     print('saving files...')
+    if not os.path.exists('./data/geolife_features/'):
+        os.makedirs('./data/geolife_features/')
     np.save('./data/geolife_features/trjs_segs_features.npy', trjs_segs_features[:, :, :, feature_set])
     np.save('./data/geolife_features/trjs_segs_features_labels.npy', trjs_segs_features_labels)
