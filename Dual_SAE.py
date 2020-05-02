@@ -17,7 +17,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 
 from CONV2D_AE import CONV2D_AE
 from TS_CONV2D_AE import TS_CONV2D_AE
-from dataset import *
+from dataset_generation import *
 from utils import visualizeData
 from params import *
 

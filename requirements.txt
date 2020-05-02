@@ -2,3 +2,8 @@ numba
 geopy
 pyts
 pydot
+sklearn
+matplotlib
+pandas
+keras
+tensorflow

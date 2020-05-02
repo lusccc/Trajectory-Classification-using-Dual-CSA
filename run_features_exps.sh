@@ -8,7 +8,7 @@ do
   mkdir -p ${path}
   python trajectory_segmentation_and_features.py --feature_set ${features[${i}]}
   python MF_RP_mat.py --feature_set ${features[${i}]}
-  python dataset.py
+  python dataset_generation.py
   python Dual_SAE.py --results_path ${path}
 done
 

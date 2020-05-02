@@ -9,7 +9,7 @@ from keras.optimizers import Adam
 from keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, classification_report
 
-from dataset import *
+from dataset_generation import *
 from params import FEATURES_SET_1, MAX_SEGMENT_SIZE
 from trajectory_extraction import modes_to_use
 

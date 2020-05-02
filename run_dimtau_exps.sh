@@ -10,7 +10,7 @@ do
   cp ./results/ts_conv_ae_check_point.model ${path}
 
   python MF_RP_mat.py --dim ${dims[${i}]} --tau ${taus[${i}]}
-  python dataset.py
+  python dataset_generation.py
   python Dual_SAE.py --results_path ${path}
 done
 

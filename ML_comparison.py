@@ -1,7 +1,7 @@
 from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.svm import SVC
 
-from dataset import *
+from dataset_generation import *
 from params import FEATURES_SET_1
 from trajectory_extraction import modes_to_use
 
@@ -9,8 +9,8 @@ from trajectory_extraction import modes_to_use
 ml_models = [ SVC() ]
 
 n_features = len(FEATURES_SET_1)
-x_train = np.squeeze(x_features_series_train)
-x_test = np.squeeze(x_features_series_test)
+x_train = np.squeeze(Dataset.x_features_series_train)
+x_test = np.squeeze(Dataset.x_features_series_test)
 
 # construct data suitable for ml classifier
 # https://stackoverflow.com/questions/57371065/how-to-use-time-series-data-in-classification-in-sklearn
@@ -23,6 +23,7 @@ for i in range(n_features):
     x_test_features.append(x_test[:, :, i])
 x_test = np.hstack(x_test_features)
 
+print()
 
 def show_confusion_matrix(y_pred):
     print('\n###########')
