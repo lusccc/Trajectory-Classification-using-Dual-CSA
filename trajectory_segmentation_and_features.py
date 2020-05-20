@@ -1,5 +1,6 @@
 import argparse
 import multiprocessing
+import time
 
 import numpy as np
 from geopy.distance import geodesic
@@ -297,11 +298,12 @@ def calc_trjs_segs_noise_features(trjs_segs, trjs_segs_labels, valid_trjs_segs):
 
 
 if __name__ == '__main__':
+    start = time.time()
     parser = argparse.ArgumentParser(description='TRJ_SEG_FEATURE')
     parser.add_argument('--feature_set', type=str)
     args = parser.parse_args()
     if args.feature_set is None:
-        feature_set = FEATURES_SET_2
+        feature_set = FEATURES_SET_1
     else:
         feature_set = [int(item) for item in args.feature_set.split(',')]
     print('feature_set:{}'.format(feature_set))
@@ -328,6 +330,9 @@ if __name__ == '__main__':
     print(trjs_segs.shape)
     print('calc_trjs_segs_clean_features...')
     trjs_segs_features, trjs_segs_features_labels = calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_function)
+
+    end = time.time()
+    print('Running time: %s Seconds' % (end - start))
 
     print('saving files...')
     if not os.path.exists('./data/geolife_features/'):

@@ -1,11 +1,13 @@
 import os
 import pathlib
+import time
 from os.path import exists
 
 import matplotlib.pyplot as plt
 import seaborn as sns
 from keras import backend as K
-from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint, ReduceLROnPlateau
+from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+from tensorflow.keras.callbacks import TensorBoard
 from keras.engine.saving import load_model
 from keras.layers import Input
 from keras.layers import Lambda, \
@@ -15,6 +17,7 @@ from keras.models import Model
 from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
 
+import dataset
 from CONV2D_AE import CONV2D_AE
 from TS_CONV2D_AE import TS_CONV2D_AE
 from dataset_generation import *
@@ -29,8 +32,6 @@ def log(info):
     with open(os.path.join(results_path, 'log.txt'), 'a') as f:
         print(info)
         print(info, file=f)
-
-
 
 
 def student_t(z, u, alpha=1.):
@@ -104,7 +105,6 @@ def dual_SAE():
 """-----------train---------------"""
 
 
-
 def pretrain_RP(epochs=1000, batch_size=200):
     """
     pretrain is unsupervised, all data could use to train
@@ -116,7 +116,7 @@ def pretrain_RP(epochs=1000, batch_size=200):
     RP_conv_ae_ = RP_conv2d_ae
     if exists(cp_path):
         RP_conv_ae_ = load_model(cp_path)
-    RP_conv_ae_.fit(x_RP_train, x_RP_train, batch_size=batch_size, epochs=epochs, callbacks=[tb, cp])
+    RP_conv_ae_.fit(x_RP_train, x_RP_train, batch_size=batch_size, epochs=epochs, callbacks=[cp])
 
 
 def pretrain_ts(epochs=1000, batch_size=200):
@@ -130,9 +130,9 @@ def pretrain_ts(epochs=1000, batch_size=200):
     ts_conv1d_ae_ = ts_conv2d_ae
     if exists(cp_path):
         ts_conv1d_ae_ = load_model(cp_path)
-    ts_conv1d_ae_.fit(Dataset.x_features_series_train, x_features_series_train, batch_size=batch_size,
+    ts_conv1d_ae_.fit(dataset.x_features_series_train, x_features_series_train, batch_size=batch_size,
                       epochs=epochs,
-                      callbacks=[tb, cp])
+                      callbacks=[cp])
 
 
 def train_classifier(pretrained=True, epochs=100, batch_size=200):
@@ -159,12 +159,12 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200):
                         validation_data=(
                             [x_RP_test, x_centroids_test, x_features_series_test],
                             [x_RP_test, y_test, x_features_series_test]),
-                        callbacks=[early_stopping, tb, cp, visulazation_callback, ],
+                        callbacks=[early_stopping, cp, visulazation_callback, ],
                         )
     #
-    score = np.argmax(hist.history['val_lambda_1_acc'])
+    score = np.argmax(hist.history['val_lambda_1_accuracy'])
     log('the optimal epoch size: {}, the value of high accuracy {}'.format(hist.epoch[score],
-                                                                             np.max(hist.history['val_lambda_1_acc'])))
+                                                                           np.max(hist.history['val_lambda_1_accuracy'])))
 
 
 class SAE_embedding_visualization_callback(ModelCheckpoint):
@@ -236,7 +236,6 @@ if __name__ == '__main__':
     parser.add_argument('--epoch1', default=100, type=int)
     parser.add_argument('--epoch2', default=350, type=int)
 
-
     args = parser.parse_args()
     results_path = args.results_path
     alpha = args.alpha
@@ -247,22 +246,23 @@ if __name__ == '__main__':
     epoch1 = args.epoch1
     epoch2 = args.epoch2
     pathlib.Path(os.path.join(results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
-    log('results_path:{} , loss weight:{},{},{}, no_pretrain:{}, no_joint_train:{}'.format(results_path, alpha, beta, gamma,
-                                                                                       no_pretrain, no_joint_train))
+    log('results_path:{} , loss weight:{},{},{}, no_pretrain:{}, no_joint_train:{}'.format(results_path, alpha, beta,
+                                                                                           gamma,
+                                                                                           no_pretrain, no_joint_train))
 
-    x_RP_train = Dataset.x_RP_train
-    x_RP_test = Dataset.x_RP_test
-    x_features_series_train = Dataset.x_features_series_train
-    x_features_series_test = Dataset.x_features_series_test
-    x_centroids_train = Dataset.x_centroids_train
-    x_centroids_test = Dataset.x_centroids_test
-    y_train = Dataset.y_train
-    y_test = Dataset.y_test
+    x_RP_train = dataset.x_RP_train
+    x_RP_test = dataset.x_RP_test
+    x_features_series_train = dataset.x_features_series_train
+    x_features_series_test = dataset.x_features_series_test
+    x_centroids_train = dataset.x_centroids_train
+    x_centroids_test = dataset.x_centroids_test
+    y_train = dataset.y_train
+    y_test = dataset.y_test
 
     EMB_DIM = x_centroids_train.shape[2]
 
     epochs = 30
-    batch_size = 600
+    batch_size = 480
     """ note: each autoencoder has same embedding,
      embedding will be concated to match EMB_DIM, 
     i.e. centroids has dim EMB_DIM"""
@@ -291,9 +291,16 @@ if __name__ == '__main__':
     if no_pretrain or no_joint_train:
         train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
     else:
+        t0 = time.time()
         # pretrain_RP(epoch1, batch_size)
+        # t1 = time.time()
+        # log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
         # pretrain_ts(epoch2, batch_size)
-        train_classifier(pretrained=True, epochs=3000, batch_size=batch_size)
+        # t2 = time.time()
+        # log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
+        train_classifier(pretrained=True, epochs=100, batch_size=batch_size)
+        t3 = time.time()
+        log('train_classifier Running time: %s Seconds' % (t3 - t0))
 
     visualize_centroids()
     visualize_dual_ae_embedding()

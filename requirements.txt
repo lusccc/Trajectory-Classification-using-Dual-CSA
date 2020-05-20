@@ -5,5 +5,4 @@ pydot
 sklearn
 matplotlib
 pandas
-keras
-tensorflow
+seaborn

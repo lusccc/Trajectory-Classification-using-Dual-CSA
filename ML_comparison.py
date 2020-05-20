@@ -1,16 +1,18 @@
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.svm import SVC
 
-from dataset_generation import *
+from dataset import *
+# from dataset_generation import *
 from params import FEATURES_SET_1
 from trajectory_extraction import modes_to_use
 
 #RandomForestClassifier(),SVC(),KNeighborsClassifier(),   MLPClassifier(), DecisionTreeClassifier(),
-ml_models = [ SVC() ]
+ml_models = [ RandomForestClassifier() ]
 
 n_features = len(FEATURES_SET_1)
-x_train = np.squeeze(Dataset.x_features_series_train)
-x_test = np.squeeze(Dataset.x_features_series_test)
+x_train = np.squeeze(x_features_series_train)
+x_test = np.squeeze(x_features_series_test)
 
 # construct data suitable for ml classifier
 # https://stackoverflow.com/questions/57371065/how-to-use-time-series-data-in-classification-in-sklearn
@@ -35,12 +37,12 @@ def show_confusion_matrix(y_pred):
     print(re)
 
 
-# for i, model in enumerate(ml_models):
-#     print('$$$$ {} $$$$'.format(i))
-#     model.fit(x_train, y_train)
-#     y_pred = model.predict(x_test)
-#     y_pred = np.argmax(y_pred, axis=1)
-#     show_confusion_matrix(y_pred)
+for i, model in enumerate(ml_models):
+    print('$$$$ {} $$$$'.format(i))
+    model.fit(x_train, y_train)
+    y_pred = model.predict(x_test)
+    y_pred = np.argmax(y_pred, axis=1)
+    show_confusion_matrix(y_pred)
 
 
 def svc_classification():
@@ -51,4 +53,4 @@ def svc_classification():
     y_pred = model.predict(x_test)
     show_confusion_matrix(y_pred)
 
-svc_classification()
+# svc_classification()

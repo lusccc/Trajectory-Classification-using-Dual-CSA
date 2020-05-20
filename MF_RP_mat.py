@@ -1,5 +1,6 @@
 import argparse
 import multiprocessing
+import time
 from math import cos, pi
 
 import numpy as np
@@ -88,7 +89,7 @@ def sign(m, n):
 
 
 if __name__ == '__main__':
-
+    start = time.time()
     parser = argparse.ArgumentParser(description='RP_mat')
     parser.add_argument('--dim', default=DIM, type=int)
     parser.add_argument('--tau', default=TAU, type=int)
@@ -126,4 +127,6 @@ if __name__ == '__main__':
     features_RP_mats = np.concatenate(features_RP_mats, axis=3)
 
     print(' ####\nfeatures_RP_mats.shape:{}'.format(features_RP_mats.shape))
+    end = time.time()
+    print('Running time: %s Seconds' % (end - start))
     np.save('./data/geolife_features/RP_mats.npy', features_RP_mats)

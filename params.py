@@ -17,7 +17,7 @@ MIN_N_POINTS = 10
 DIM = 8  # Embedding dimension
 TAU = 8  # Embedding delay
 
-N_VECTORS = MAX_SEGMENT_SIZE - TAU * (DIM - 1) # RP mat size
+N_VECTORS = MAX_SEGMENT_SIZE - TAU * (DIM - 1)  # RP mat size
 
 SCALER = MinMaxScaler()
 
@@ -30,8 +30,8 @@ FILTER_SEGS = False
 
 # 0        1     2  3  4  5  6   7    8  9
 # delta_t, hour, d, v, a, h, hc, hcr, s, tn
-FEATURES_SET_1 = [3, 4, 7, 8, 9]
-FEATURES_SET_2 = [3, 4, 7, 8, 9]
+FEATURES_SET_1 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+FEATURES_SET_2 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 # loss wight
 ALPHA = 1
 BETA = 4

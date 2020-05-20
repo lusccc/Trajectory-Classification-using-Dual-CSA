@@ -68,16 +68,6 @@ def make_dataset():
     np.save('./data/geolife_features/y_test.npy', y_test)
 
 
-class Dataset(object):
-    x_RP_train = np.load('./data/geolife_features/x_RP_train.npy', )
-    x_RP_test = np.load('./data/geolife_features/x_RP_test.npy', )
-    x_features_series_train = np.load('./data/geolife_features/x_features_series_train.npy', )
-    x_features_series_test = np.load('./data/geolife_features/x_features_series_test.npy', )
-    x_centroids_train = np.load('./data/geolife_features/x_centroids_train.npy', )
-    x_centroids_test = np.load('./data/geolife_features/x_centroids_test.npy', )
-    y_train = np.load('./data/geolife_features/y_train.npy', )
-    y_test = np.load('./data/geolife_features/y_test.npy', )
-    print('centroids shape:{}'.format(x_centroids_train.shape))
 
 def make_dataset_for_clustering():
     print('make_dataset_for_clustering...')
