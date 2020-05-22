@@ -41,7 +41,8 @@ def segment_trjs(trjs, labels):
     tasks = []
     batch_size = int(len(trjs) / n_cpus + 1)
     for i in range(0, n_cpus):
-        tasks.append(pool.apply_async(do_segment_trjs, (trjs[i*batch_size:(i+1)*batch_size], labels[i*batch_size:(i+1)*batch_size])))
+        tasks.append(pool.apply_async(do_segment_trjs, (
+        trjs[i * batch_size:(i + 1) * batch_size], labels[i * batch_size:(i + 1) * batch_size])))
 
     res = np.array([[t.get()[0], t.get()[1]] for t in tasks])
     print(np.shape(res))
@@ -97,7 +98,8 @@ def filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels):
     batch_size = int(len(trjs_segs) / n_cpus + 1)
     for i in range(0, n_cpus):
         tasks.append(pool.apply_async(do_filter_trjs_segs_gps_data,
-                                      (trjs_segs[i*batch_size:(i+1)*batch_size], trjs_segs_labels[i*batch_size:(i+1)*batch_size])))
+                                      (trjs_segs[i * batch_size:(i + 1) * batch_size],
+                                       trjs_segs_labels[i * batch_size:(i + 1) * batch_size])))
     res = np.array([[t.get()[0], t.get()[1]] for t in tasks])
     print(np.shape(res))
     trjs_segs = np.concatenate(res[:, 0])
@@ -204,7 +206,8 @@ def calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_funct
     batch_size = int(len(trjs_segs) / n_cpus + 1)
     for i in range(0, n_cpus):
         tasks.append(pool.apply_async(do_calc_trjs_segs_clean_features,
-                                      (trjs_segs[i*batch_size:(i+1)*batch_size], trjs_segs_labels[i*batch_size:(i+1)*batch_size],
+                                      (trjs_segs[i * batch_size:(i + 1) * batch_size],
+                                       trjs_segs_labels[i * batch_size:(i + 1) * batch_size],
                                        fill_series_function)))
     res = np.array([[t.get()[0], t.get()[1]] for t in tasks])
     trjs_segs_features = np.concatenate(res[:, 0])
@@ -297,10 +300,27 @@ def calc_trjs_segs_noise_features(trjs_segs, trjs_segs_labels, valid_trjs_segs):
     return np.array(trjs_segs_features), np.array(trjs_segs_features_labels)
 
 
+def random_drop_points(trjs, percentage=0.1):
+    new_trjs = []
+    for trj in trjs:
+        n = len(trj)
+        n_drop = int(n * percentage)
+        random_idx = np.random.choice(n, n_drop, replace=False)
+        new_trj = np.delete(trj, random_idx, axis=0)
+        # if len(new_trj) <= MAX_SEGMENT_SIZE:
+        #     print('short seg')
+        #     continue
+        new_trjs.append(new_trj)
+    return np.array(new_trjs)
+
+
 if __name__ == '__main__':
     start = time.time()
     parser = argparse.ArgumentParser(description='TRJ_SEG_FEATURE')
     parser.add_argument('--feature_set', type=str)
+    parser.add_argument('--random_drop', type=bool,
+                        default=False)  # random drop gps point to test if the algorithm is sensitive to sample rate
+    parser.add_argument('--random_drop_percentage', type=float, default=0)
     args = parser.parse_args()
     if args.feature_set is None:
         feature_set = FEATURES_SET_1
@@ -315,6 +335,11 @@ if __name__ == '__main__':
     trjs = np.load('./data/geolife_extracted/trjs.npy', allow_pickle=True)
     labels = np.load('./data/geolife_extracted/labels.npy', allow_pickle=True)
     trjs, labels = shuffle(trjs, labels, random_state=0)  # !!!shuffle
+    if args.random_drop_percentage:
+        args.random_drop = True
+    if args.random_drop:
+        print('random drop points, percentage:{}'.format(args.random_drop_percentage))
+        trjs = random_drop_points(trjs, args.random_drop_percentage)
 
     # n_test = 1000
     # trjs = trjs[:n_test]
@@ -329,7 +354,8 @@ if __name__ == '__main__':
     trjs_segs, trjs_segs_labels = filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels)
     print(trjs_segs.shape)
     print('calc_trjs_segs_clean_features...')
-    trjs_segs_features, trjs_segs_features_labels = calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_function)
+    trjs_segs_features, trjs_segs_features_labels = calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels,
+                                                                                  fill_series_function)
 
     end = time.time()
     print('Running time: %s Seconds' % (end - start))

@@ -25,7 +25,7 @@ from utils import visualizeData
 from params import *
 
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
 def log(info):
@@ -292,15 +292,15 @@ if __name__ == '__main__':
         train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
     else:
         t0 = time.time()
-        # pretrain_RP(epoch1, batch_size)
-        # t1 = time.time()
-        # log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
-        # pretrain_ts(epoch2, batch_size)
-        # t2 = time.time()
-        # log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
-        train_classifier(pretrained=True, epochs=100, batch_size=batch_size)
+        pretrain_RP(epoch1, batch_size)
+        t1 = time.time()
+        log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
+        pretrain_ts(epoch2, batch_size)
+        t2 = time.time()
+        log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
+        train_classifier(pretrained=True, epochs=3000, batch_size=batch_size)
         t3 = time.time()
-        log('train_classifier Running time: %s Seconds' % (t3 - t0))
+        log('train_classifier Running time: %s Seconds' % (t3 - t2))
 
     visualize_centroids()
     visualize_dual_ae_embedding()
