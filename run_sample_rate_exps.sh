@@ -7,8 +7,9 @@ do
   rm -rf ./data/geolife_features
   path="./results/drop${percentage[${i}]}/"
   mkdir -p "${path}"
-  python trajectory_segmentation_and_features.py --random_drop_percentage "${percentage[${i}]}"
+  python trajectory_segmentation_and_features.py --random_drop True --random_drop_percentage "${percentage[${i}]}"
   python MF_RP_mat.py
+  python PEDCC.py
   python dataset_generation.py
   python Dual_SAE.py --results_path "${path}"
 done

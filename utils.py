@@ -9,6 +9,8 @@ from sklearn import manifold
 from params import SCALER, MAX_SEGMENT_SIZE, MIN_N_POINTS
 import time
 from datetime import datetime
+from sklearn.preprocessing import StandardScaler
+
 
 
 def scale_any_shape_data(data, scaler=SCALER):
@@ -25,6 +27,25 @@ def scale_data(data, scaler=SCALER):
     data = np.array(data)
     data = scaler.fit_transform(data)
     return data
+
+def scale_RP_each_feature(RP_all_features):
+    scaler = StandardScaler()
+    n_features = RP_all_features.shape[3]
+    for i in range(n_features):
+        RP_single_feature = RP_all_features[:, :, :, i]
+        scaled = scale_any_shape_data(RP_single_feature, scaler)
+        RP_all_features[:, :, :, i] = scaled
+    return RP_all_features
+
+
+def scale_segs_each_features(segs_all_features):
+    scaler = StandardScaler()
+    n_features = segs_all_features.shape[3]
+    for i in range(n_features):
+        segs_single_feature = segs_all_features[:, :, :, i]
+        scaled = scale_any_shape_data(segs_single_feature, scaler)
+        segs_all_features[:, :, :, i] = scaled
+    return segs_all_features
 
 
 @jit(nopython=True)

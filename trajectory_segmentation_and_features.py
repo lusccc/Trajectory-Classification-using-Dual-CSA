@@ -4,11 +4,13 @@ import time
 
 import numpy as np
 from geopy.distance import geodesic
+from keras.utils import to_categorical
+from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
 from params import *
 
-from utils import timestamp_to_hour
+from utils import timestamp_to_hour, scale_segs_each_features
 from trajectory_extraction import MODE_NAMES
 from utils import segment_single_series, check_lat_lng, calc_initial_compass_bearing, interp_single_series
 
@@ -42,7 +44,7 @@ def segment_trjs(trjs, labels):
     batch_size = int(len(trjs) / n_cpus + 1)
     for i in range(0, n_cpus):
         tasks.append(pool.apply_async(do_segment_trjs, (
-        trjs[i * batch_size:(i + 1) * batch_size], labels[i * batch_size:(i + 1) * batch_size])))
+            trjs[i * batch_size:(i + 1) * batch_size], labels[i * batch_size:(i + 1) * batch_size])))
 
     res = np.array([[t.get()[0], t.get()[1]] for t in tasks])
     print(np.shape(res))
@@ -300,27 +302,13 @@ def calc_trjs_segs_noise_features(trjs_segs, trjs_segs_labels, valid_trjs_segs):
     return np.array(trjs_segs_features), np.array(trjs_segs_features_labels)
 
 
-def random_drop_points(trjs, percentage=0.1):
-    new_trjs = []
-    for trj in trjs:
-        n = len(trj)
-        n_drop = int(n * percentage)
-        random_idx = np.random.choice(n, n_drop, replace=False)
-        new_trj = np.delete(trj, random_idx, axis=0)
-        # if len(new_trj) <= MAX_SEGMENT_SIZE:
-        #     print('short seg')
-        #     continue
-        new_trjs.append(new_trj)
-    return np.array(new_trjs)
-
-
 if __name__ == '__main__':
     start = time.time()
     parser = argparse.ArgumentParser(description='TRJ_SEG_FEATURE')
     parser.add_argument('--feature_set', type=str)
-    parser.add_argument('--random_drop', type=bool,
-                        default=False)  # random drop gps point to test if the algorithm is sensitive to sample rate
-    parser.add_argument('--random_drop_percentage', type=float, default=0)
+    parser.add_argument('--trjs_path', type=str)
+    parser.add_argument('--labels_path', type=str)
+    parser.add_argument('--save_file_suffix', type=str, default='train')
     args = parser.parse_args()
     if args.feature_set is None:
         feature_set = FEATURES_SET_1
@@ -332,18 +320,8 @@ if __name__ == '__main__':
     print('n_thread:{}'.format(n_cpus))
     pool = multiprocessing.Pool(processes=n_cpus)
 
-    trjs = np.load('./data/geolife_extracted/trjs.npy', allow_pickle=True)
-    labels = np.load('./data/geolife_extracted/labels.npy', allow_pickle=True)
-    trjs, labels = shuffle(trjs, labels, random_state=0)  # !!!shuffle
-    if args.random_drop_percentage:
-        args.random_drop = True
-    if args.random_drop:
-        print('random drop points, percentage:{}'.format(args.random_drop_percentage))
-        trjs = random_drop_points(trjs, args.random_drop_percentage)
-
-    # n_test = 1000
-    # trjs = trjs[:n_test]
-    # labels = labels[:n_test]
+    trjs = np.load(args.trjs_path, allow_pickle=True)
+    labels = np.load(args.labels_path, allow_pickle=True)
 
     fill_series_function = interp_single_series
 
@@ -363,5 +341,7 @@ if __name__ == '__main__':
     print('saving files...')
     if not os.path.exists('./data/geolife_features/'):
         os.makedirs('./data/geolife_features/')
-    np.save('./data/geolife_features/trjs_segs_features.npy', trjs_segs_features[:, :, :, feature_set])
-    np.save('./data/geolife_features/trjs_segs_features_labels.npy', trjs_segs_features_labels)
+    np.save('./data/geolife_features/trjs_segs_features_{}.npy'.format(args.save_file_suffix),
+            scale_segs_each_features(trjs_segs_features[:, :, :, feature_set]))  # note scaled!
+    np.save('./data/geolife_features/trjs_segs_features_labels_{}.npy'.format(args.save_file_suffix),
+            to_categorical(trjs_segs_features_labels, num_classes=N_CLASS))  # labels to one-hot

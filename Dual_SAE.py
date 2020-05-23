@@ -25,7 +25,7 @@ from utils import visualizeData
 from params import *
 
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
 def log(info):
@@ -190,11 +190,11 @@ def show_confusion_matrix():
     log(cm)
     with open(os.path.join(results_path, 'confusion_matrix.txt'), 'w') as f:
         print(cm, file=f)
-    f, ax = plt.subplots()
-    sns.heatmap(cm, annot=True, ax=ax)  # 画热力图
-    ax.set_title('confusion matrix')  # 标题
-    ax.set_xlabel('predict')  # x轴
-    ax.set_ylabel('true')  # y轴
+    # f, ax = plt.subplots()
+    # sns.heatmap(cm, annot=True, ax=ax)
+    # ax.set_title('confusion matrix')
+    # ax.set_xlabel('predict')
+    # ax.set_ylabel('true')
     # plt.show()
 
     re = classification_report(y_true, y_pred, target_names=['walk', 'bike', 'bus', 'driving', 'train/subway'],
@@ -277,12 +277,12 @@ if __name__ == '__main__':
     RP_conv2d_ae = RP_Conv2D_AE()
     ts_conv2d_ae = ts_Conv2d_AE()
     dual_sae, dual_encoder = dual_SAE()
-    tb = TensorBoard(log_dir=os.path.join(results_path, 'tensorflow_logs'),  # log 目录
-                     histogram_freq=0,  # 按照何等频率（epoch）来计算直方图，0为不计算
-                     #                  batch_size=32,     # 用多大量的数据计算直方图
-                     write_graph=True,  # 是否存储网络结构图
-                     write_grads=True,  # 是否可视化梯度直方图
-                     write_images=True,  # 是否可视化参数
+    tb = TensorBoard(log_dir=os.path.join(results_path, 'tensorflow_logs'),
+                     histogram_freq=0,
+
+                     write_graph=True,
+                     write_grads=True,
+                     write_images=True,
                      embeddings_freq=0,
                      embeddings_layer_names=None,
                      embeddings_metadata=None)
@@ -292,15 +292,15 @@ if __name__ == '__main__':
         train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
     else:
         t0 = time.time()
-        pretrain_RP(epoch1, batch_size)
-        t1 = time.time()
-        log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
-        pretrain_ts(epoch2, batch_size)
-        t2 = time.time()
-        log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
+        # pretrain_RP(epoch1, batch_size)
+        # t1 = time.time()
+        # log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
+        # pretrain_ts(epoch2, batch_size)
+        # t2 = time.time()
+        # log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
         train_classifier(pretrained=True, epochs=3000, batch_size=batch_size)
         t3 = time.time()
-        log('train_classifier Running time: %s Seconds' % (t3 - t2))
+        log('train_classifier Running time: %s Seconds' % (t3 - t0))
 
     visualize_centroids()
     visualize_dual_ae_embedding()

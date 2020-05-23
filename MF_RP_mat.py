@@ -8,7 +8,7 @@ from numpy.linalg import norm
 from pyts.image.recurrence import _trajectories
 
 from params import DIM, TAU, FEATURES_SET_1
-from utils import scale_any_shape_data
+from utils import scale_any_shape_data, scale_RP_each_feature
 
 #  Settings for the embedding
 
@@ -94,6 +94,8 @@ if __name__ == '__main__':
     parser.add_argument('--dim', default=DIM, type=int)
     parser.add_argument('--tau', default=TAU, type=int)
     parser.add_argument('--feature_set', type=str)
+    parser.add_argument('--trjs_segs_features_path', type=str)
+    parser.add_argument('--save_path', type=str)
 
     args = parser.parse_args()
     dim = args.dim
@@ -105,15 +107,12 @@ if __name__ == '__main__':
         feature_set = [int(item) for item in args.feature_set.split(',')]
     print('feature_set:{}'.format(feature_set))
 
-    labels = np.load('./data/geolife_features/trjs_segs_features_labels.npy')
-
-    trjs_segs_features = np.load('./data/geolife_features/trjs_segs_features.npy')
+    trjs_segs_features = np.load(args.trjs_segs_features_path)
 
     features_RP_mats = []
     n_features = trjs_segs_features.shape[3]
     trjs_segs_features = np.reshape(trjs_segs_features, [trjs_segs_features.shape[0], trjs_segs_features.shape[2],
                                                          trjs_segs_features.shape[3]])
-
 
     for i in range(n_features):
         single_feature_segs = trjs_segs_features[:, :, i]  # (n, 48)
@@ -129,4 +128,4 @@ if __name__ == '__main__':
     print(' ####\nfeatures_RP_mats.shape:{}'.format(features_RP_mats.shape))
     end = time.time()
     print('Running time: %s Seconds' % (end - start))
-    np.save('./data/geolife_features/RP_mats.npy', features_RP_mats)
+    np.save(args.save_path, scale_RP_each_feature(features_RP_mats))  # note scaled!

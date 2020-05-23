@@ -49,7 +49,7 @@ def make_dataset():
         trjs_segs_features,
         centroids,
         labels,
-        test_size=0.20, random_state=7, shuffle=True
+        test_size=0.20, random_state=7, shuffle=False # already shuffled in trajectory_extraction.py, no shuffle here
     )
     y_train = to_categorical(y_train, num_classes=N_CLASS)
     y_test = to_categorical(y_test, num_classes=N_CLASS)

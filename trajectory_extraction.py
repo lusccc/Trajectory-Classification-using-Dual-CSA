@@ -1,10 +1,13 @@
 # coding=utf-8
-# reference from https://heremaps.github.io/pptk/tutorials/viewer/geolife.html
+# reference to https://heremaps.github.io/pptk/tutorials/viewer/geolife.html
 import glob
 import os.path
 
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
+
 from params import *
 
 from utils import datatime_to_timestamp
@@ -114,6 +117,22 @@ if __name__ == '__main__':
     trjs = np.array(trjs)
     labels = np.array(trjs_labels)
 
-    # 保存带标签的轨迹和 标签
-    np.save('./data/geolife_extracted/trjs.npy', trjs)
-    np.save('./data/geolife_extracted/labels.npy', labels)
+    trjs, labels = shuffle(trjs, labels, random_state=0)
+
+    print('saving files...')
+    if not os.path.exists('./data/geolife_extracted/'):
+        os.makedirs('./data/geolife_extracted/')
+
+    trjs_train, trjs_test, \
+    labels_train, labels_test \
+        = train_test_split(
+        trjs,
+        labels,
+        test_size=0.20, random_state=7, shuffle=False  # already shuffled, no shuffle here
+    )
+
+    np.save('./data/geolife_extracted/trjs_train.npy', trjs_train)
+    np.save('./data/geolife_extracted/trjs_test.npy', trjs_test)
+    np.save('./data/geolife_extracted/labels_train.npy', labels_train)
+    np.save('./data/geolife_extracted/labels_test.npy', labels_test)
+

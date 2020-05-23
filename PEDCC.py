@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.model_selection import train_test_split
 
 from params import *
 
@@ -7,13 +8,13 @@ from utils import scale_any_shape_data
 '''
 https://github.com/anlongstory/CSAE
 '''
+
+
 class PEDDC(object):
 
     def __init__(self, EMBEDDING_DIM):
         super().__init__()
         self.EMBEDDING_DIM = EMBEDDING_DIM
-
-
 
     def countnext(self, u, v, G):
         num = u.shape[0]
@@ -53,7 +54,6 @@ class PEDDC(object):
         u = np.array(u)
         G = 1e-2
 
-
         for i in range(200):
             un, vn = self.countnext(u, v, G)
             u = un
@@ -71,19 +71,16 @@ class PEDDC(object):
         return cs
 
 
-
-
 if __name__ == '__main__':
     pedcc = PEDDC(TOTAL_EMBEDDING_DIM)
     c = pedcc.generate_center()
-    n_samples = np.load('./data/geolife_features/trjs_segs_features_labels.npy').shape[0]
+    n_train = np.load('./data/geolife_features/trjs_segs_features_labels_train.npy').shape[0]
+    n_test = np.load('./data/geolife_features/trjs_segs_features_labels_test.npy').shape[0]
     # !!those data are generated, no real trajectory data involved!!
     scale = True
-    centroids = pedcc.repeat(c, n_samples, scale)
-    np.save('./data/geolife_features/centroids.npy', centroids)
+    centroids_train = pedcc.repeat(c, n_train, scale)
+    centroids_test = pedcc.repeat(c, n_test, scale)
 
 
-
-
-
-
+    np.save('./data/geolife_features/centroids_train.npy', centroids_train)
+    np.save('./data/geolife_features/centroids_test.npy', centroids_test)
