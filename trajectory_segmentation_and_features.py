@@ -302,6 +302,20 @@ def calc_trjs_segs_noise_features(trjs_segs, trjs_segs_labels, valid_trjs_segs):
     return np.array(trjs_segs_features), np.array(trjs_segs_features_labels)
 
 
+def random_drop_points(trjs, percentage=0.1):
+    new_trjs = []
+    for trj in trjs:
+        n = len(trj)
+        n_drop = int(n * percentage)
+        random_idx = np.random.choice(n, n_drop, replace=False)
+        new_trj = np.delete(trj, random_idx, axis=0)
+        # if len(new_trj) <= MAX_SEGMENT_SIZE:
+        #     print('short seg')
+        #     continue
+        new_trjs.append(new_trj)
+    return np.array(new_trjs)
+
+
 if __name__ == '__main__':
     start = time.time()
     parser = argparse.ArgumentParser(description='TRJ_SEG_FEATURE')
@@ -309,6 +323,10 @@ if __name__ == '__main__':
     parser.add_argument('--trjs_path', type=str)
     parser.add_argument('--labels_path', type=str)
     parser.add_argument('--save_file_suffix', type=str, default='train')
+    # note！！！: after random drop points in trajectory,
+    # the produced features series will have the different number of samples to the original features series
+    parser.add_argument('--random_drop_percentage', type=float, default='0.')
+
     args = parser.parse_args()
     if args.feature_set is None:
         feature_set = FEATURES_SET_1
@@ -322,6 +340,10 @@ if __name__ == '__main__':
 
     trjs = np.load(args.trjs_path, allow_pickle=True)
     labels = np.load(args.labels_path, allow_pickle=True)
+
+    if args.random_drop_percentage:
+        print('random_drop_percentage:{}'.format(args.random_drop_percentage))
+        trjs = random_drop_points(trjs, args.random_drop_percentage)
 
     fill_series_function = interp_single_series
 
