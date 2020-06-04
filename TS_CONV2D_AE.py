@@ -11,7 +11,7 @@ def TS_CONV2D_AE(input_shape, embedding_dim, n_features, name, results_path):
     time series conv2d ae
     """
     size = input_shape[1]  # series size
-    print('input_shape:', input_shape)
+    # print('input_shape:', input_shape)
     activ = 'relu'
     conv_ae = Sequential()
     conv_ae.add(Conv2D(32, (1, 3), strides=(1, 1), padding='same', input_shape=input_shape))
@@ -46,6 +46,7 @@ def TS_CONV2D_AE(input_shape, embedding_dim, n_features, name, results_path):
     # conv_ae.add(BatchNormalization())
     conv_ae.add(Activation(activ, name='{}_reconstruction'.format(name)))
 
-    # conv_ae.summary()
+    print(f'###summary for {name}###')
+    conv_ae.summary()
     plot_model(conv_ae, to_file=os.path.join(results_path,'{}_conv2d_ae.png'.format(name)), show_shapes=True)
     return conv_ae

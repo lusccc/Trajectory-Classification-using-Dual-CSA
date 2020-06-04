@@ -8,7 +8,7 @@ from keras.utils import plot_model
 
 def CONV2D_AE(input_shape, embedding_dim, n_features, name, results_path):
     size = input_shape[1]  # mat size
-    print('input_shape:', input_shape)
+    # print('input_shape:', input_shape)
     activ = 'relu'
     pad = 'same'
     conv_ae = Sequential()
@@ -43,8 +43,8 @@ def CONV2D_AE(input_shape, embedding_dim, n_features, name, results_path):
     conv_ae.add(Conv2DTranspose(n_features, (3, 3), strides=(1, 1), padding=pad))
     # conv_ae.add(BatchNormalization())
     conv_ae.add(Activation(activ, name='{}_reconstruction'.format(name)))
-
-    # conv_ae.summary()
+    print(f'###summary for {name}###')
+    conv_ae.summary()
     plot_model(conv_ae, to_file=os.path.join(results_path,'{}_conv2d_ae.png'.format(name)), show_shapes=True)
     return conv_ae
 
@@ -71,6 +71,6 @@ def CAE(embedding_dim, n_features, name, input_shape=(28, 28, 1), filters=[32, 6
     model.add(Conv2DTranspose(filters[0], 5, strides=2, padding='same', activation='relu', name='deconv2'))
 
     model.add(Conv2DTranspose(input_shape[2], 5, strides=2, padding='same', name='{}_reconstruction'.format(name)))
-    # model.summary()
+    model.summary()
     plot_model(model, to_file='./results/{}_conv2d_ae.png'.format(name), show_shapes=True)
     return model

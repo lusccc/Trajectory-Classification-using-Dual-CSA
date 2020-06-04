@@ -1,3 +1,4 @@
+import argparse
 import os
 import pathlib
 import time
@@ -7,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from keras import backend as K
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
-from tensorflow.keras.callbacks import TensorBoard
+# from tensorflow.keras.callbacks import TensorBoard
 from keras.engine.saving import load_model
 from keras.layers import Input
 from keras.layers import Lambda, \
@@ -20,13 +21,22 @@ from sklearn.metrics import confusion_matrix, classification_report
 import dataset
 from CONV2D_AE import CONV2D_AE
 from TS_CONV2D_AE import TS_CONV2D_AE
-from dataset_generation import *
+import numpy as np
 from utils import visualizeData
 from params import *
+import tensorflow as tf
 
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
+
+config = tf.compat.v1.ConfigProto()
+config.gpu_options.allow_growth = True
+config.log_device_placement = True
+session = tf.compat.v1.Session(config=config)
+tf.compat.v1.keras.backend.set_session(session)
+# do your ML task
+
 
 def log(info):
     with open(os.path.join(results_path, 'log.txt'), 'a') as f:
@@ -85,7 +95,7 @@ def dual_SAE():
         inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv2d_ae.get_layer(index=0).input],
         outputs=[RP_conv2d_ae.get_layer('RP_reconstruction').output, classification,
                  ts_conv2d_ae.get_layer('ts_reconstruction').output])
-    # dual_sae.summary()
+    dual_sae.summary()
     plot_model(dual_sae, to_file=os.path.join(results_path, 'dual_sae.png'), show_shapes=True)
 
     dual_encoder = Model(
@@ -262,7 +272,7 @@ if __name__ == '__main__':
     EMB_DIM = x_centroids_train.shape[2]
 
     epochs = 30
-    batch_size = 480
+    batch_size = 300
     """ note: each autoencoder has same embedding,
      embedding will be concated to match EMB_DIM, 
     i.e. centroids has dim EMB_DIM"""
@@ -277,30 +287,30 @@ if __name__ == '__main__':
     RP_conv2d_ae = RP_Conv2D_AE()
     ts_conv2d_ae = ts_Conv2d_AE()
     dual_sae, dual_encoder = dual_SAE()
-    tb = TensorBoard(log_dir=os.path.join(results_path, 'tensorflow_logs'),
-                     histogram_freq=0,
-
-                     write_graph=True,
-                     write_grads=True,
-                     write_images=True,
-                     embeddings_freq=0,
-                     embeddings_layer_names=None,
-                     embeddings_metadata=None)
+    # tb = TensorBoard(log_dir=os.path.join(results_path, 'tensorflow_logs'),
+    #                  histogram_freq=0,
+    #
+    #                  write_graph=True,
+    #                  write_grads=True,
+    #                  write_images=True,
+    #                  embeddings_freq=0,
+    #                  embeddings_layer_names=None,
+    #                  embeddings_metadata=None)
 
     # means only train classifier using default loss_weight
     if no_pretrain or no_joint_train:
         train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
     else:
         t0 = time.time()
-        # pretrain_RP(epoch1, batch_size)
-        # t1 = time.time()
-        # log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
-        # pretrain_ts(epoch2, batch_size)
-        # t2 = time.time()
-        # log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
+        pretrain_RP(epoch1, batch_size)
+        t1 = time.time()
+        log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
+        pretrain_ts(epoch2, batch_size)
+        t2 = time.time()
+        log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
         train_classifier(pretrained=True, epochs=3000, batch_size=batch_size)
         t3 = time.time()
-        log('train_classifier Running time: %s Seconds' % (t3 - t0))
+        log('train_classifier Running time: %s Seconds' % (t3 - t1))
 
     visualize_centroids()
     visualize_dual_ae_embedding()
