@@ -38,7 +38,7 @@ Specifically, the function of each file is as follows.
   
 (2) `trajectory_extraction.py` is used to extract trajectory of each user and with its corresponding label. It also will split the dataset into train set and test set.  
 (3) `trajectory_segmentation_and_features.py` is used to segment the trajectory and calculate its movement features.  
-(4) `MF_RP_mat.py` is used to calculate Recurrence Plots of movement features. It may require a lot of memory. Please contract us at 582066450@qq.com if you need a version run on hard disk.  
+(4) `MF_RP_mat.py` is used to calculate Recurrence Plots of movement features. It may require a lot of memory. Please contact us at 582066450@qq.com if you need a version run on hard disk.  
 (5) `PEDCC.py` is used to generate the predefined centroids of class proposed in paper _A Classification Supervised Auto-Encoder Based on Predefined Evenly-Distributed Class Centroids_. Please refer detail in https://github.com/anlongstory/CSAE.  
 (6) `Dual_SAE.py` is used to train the proposed Dual_CSA model. You can specify parameters in the code including loss weights, epoch number, etc.
 
