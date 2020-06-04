@@ -42,7 +42,7 @@ Specifically, the function of each file is as follows.
 (5) `PEDCC.py` is used to generate the predefined centroids of class proposed in paper _A Classification Supervised Auto-Encoder Based on Predefined Evenly-Distributed Class Centroids_. Please refer detail in https://github.com/anlongstory/CSAE.  
 (6) `Dual_SAE.py` is used to train the proposed Dual_CSA model. You can specify parameters in the code including loss weights, epoch number, etc.
 
-Note: the other file we did not mention is mainly used to run the comparison experiments. We will elaborate it in the feature.
+Note: the other files we did not mention are mainly used to run the comparison experiments. We will elaborate them in the feature.
 
 **If you have any question, please feel free to contact us at 58206645@qq.com**
 
