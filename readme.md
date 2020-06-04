@@ -18,7 +18,7 @@ keras v2.3.1
 
 You can simply install them by `pip install -r requirements.txt`.
 # Usage
-In this paper, we use GeoLife as our dataset. Please download it from https://www.microsoft.com/en-us/download/details.aspx?id=52367. Put all users trajectory folder under `geolife_raw` directory.  
+In this paper, we use GeoLife as our dataset. Please download it from https://www.microsoft.com/en-us/download/details.aspx?id=52367. Put all users trajectory folder under `data/geolife_raw` directory.  
 
 For your convenience, you can run the `run.sh` under the project path by `bash run.sh`. The code inside `run.sh` is:
 ```shell script
