@@ -14,10 +14,12 @@ from utils import timestamp_to_hour, scale_segs_each_features
 from geolife_trajectory_extraction import MODE_NAMES
 from utils import segment_single_series, check_lat_lng, calc_initial_compass_bearing, interp_single_series
 
-# walk, bike, bus, driving, //or train/subway
-# [0, 1, 2, 3, 4]
+# 0,    1,    2,   3,         4           5
+# walk, bike, bus, driving, train/subway, run
 
-SPEED_LIMIT = {0: 7, 1: 12, 2: 120. / 3.6, 3: 180. / 3.6, 4: 120 / 3.6, 5: 120 / 3.6}
+# limit for different modes:
+
+SPEED_LIMIT = {0: 7, 1: 12, 2: 120. / 3.6, 3: 180. / 3.6, 4: 120 / 3.6, }
 # acceleration
 ACC_LIMIT = {0: 3, 1: 3, 2: 2, 3: 10, 4: 3, 5: 3}
 # TODO  heading change rate limit, not sure
@@ -319,6 +321,7 @@ def random_drop_points(trjs, percentage=0.1):
 if __name__ == '__main__':
     start = time.time()
     parser = argparse.ArgumentParser(description='TRJ_SEG_FEATURE')
+    parser.add_argument('--dataset', type=str, required=True)
     parser.add_argument('--feature_set', type=str)
     parser.add_argument('--trjs_path', type=str)
     parser.add_argument('--labels_path', type=str)
@@ -361,9 +364,10 @@ if __name__ == '__main__':
     print('Running time: %s Seconds' % (end - start))
 
     print('saving files...')
-    if not os.path.exists('./data/geolife_features/'):
-        os.makedirs('./data/geolife_features/')
-    np.save('./data/geolife_features/trjs_segs_features_{}.npy'.format(args.save_file_suffix),
+    dataset = args.dataset
+    if not os.path.exists(f'./data/{dataset}_features/'):
+        os.makedirs(f'./data/{dataset}_features/')
+    np.save(f'./data/{dataset}_features/trjs_segs_features_{args.save_file_suffix}.npy',
             scale_segs_each_features(trjs_segs_features[:, :, :, feature_set]))  # note scaled!
-    np.save('./data/geolife_features/trjs_segs_features_labels_{}.npy'.format(args.save_file_suffix),
+    np.save(f'./data/{dataset}_features/trjs_segs_features_labels_{args.save_file_suffix}.npy',
             to_categorical(trjs_segs_features_labels, num_classes=N_CLASS))  # labels to one-hot

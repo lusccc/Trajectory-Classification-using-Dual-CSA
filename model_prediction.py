@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.metrics import confusion_matrix, classification_report
 
 from Dual_SAE import student_t, N_CLASS, modes_to_use
-from dataset import *
+from dataset_factory import *
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 

@@ -2,7 +2,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.svm import SVC
 
-from dataset import *
+from dataset_factory import *
 # from dataset_generation import *
 from params import FEATURES_SET_1
 from geolife_trajectory_extraction import modes_to_use

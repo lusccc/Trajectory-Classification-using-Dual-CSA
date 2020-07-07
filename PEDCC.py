@@ -75,28 +75,30 @@ class PEDDC(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PEDCC')
+    parser.add_argument('--dataset', type=str, required=True)
     # produce centroids for random down sampling test set
     parser.add_argument('--produce_centroids_for_specific_test', default='None', type=str)
     parser.add_argument('--save_path', default='None', type=str)
     args = parser.parse_args()
     pedcc = PEDDC(TOTAL_EMBEDDING_DIM)
     scale = True
+    dataset = args.dataset
     if args.produce_centroids_for_specific_test is 'None':
         c = pedcc.generate_center()
-        n_train = np.load('./data/geolife_features/trjs_segs_features_labels_train.npy').shape[0]
-        n_test = np.load('./data/geolife_features/trjs_segs_features_labels_test.npy').shape[0]
+        n_train = np.load(f'./data/{dataset}_features/trjs_segs_features_labels_train.npy').shape[0]
+        n_test = np.load(f'./data/{dataset}_features/trjs_segs_features_labels_test.npy').shape[0]
         # !!those data are generated, no real trajectory data involved!!
         centroids_train = pedcc.repeat(c, n_train, scale)
         centroids_test = pedcc.repeat(c, n_test, scale)
         print(centroids_train.shape)
         print(centroids_test.shape)
 
-        np.save('./data/geolife_features/single_pedcc.npy', c)
-        np.save('./data/geolife_features/centroids_train.npy', centroids_train)
-        np.save('./data/geolife_features/centroids_test.npy', centroids_test)
+        np.save(f'./data/{dataset}_features/single_pedcc.npy', c)
+        np.save(f'./data/{dataset}_features/centroids_train.npy', centroids_train)
+        np.save(f'./data/{dataset}_features/centroids_test.npy', centroids_test)
     else:
         n_test = np.load(args.produce_centroids_for_specific_test).shape[0]
-        single_c = np.load('./data/geolife_features/single_pedcc.npy')
+        single_c = np.load(f'./data/{dataset}_features/single_pedcc.npy')
         centroids_test = pedcc.repeat(single_c, n_test, scale)
         np.save(args.save_path, centroids_test)
 

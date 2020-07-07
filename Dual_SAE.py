@@ -18,7 +18,7 @@ from keras.models import Model
 from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
 
-import dataset
+import dataset_factory
 from CONV2D_AE import CONV2D_AE
 from TS_CONV2D_AE import TS_CONV2D_AE
 import numpy as np
@@ -27,7 +27,7 @@ from params import *
 import tensorflow as tf
 
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
 config = tf.compat.v1.ConfigProto()
@@ -140,7 +140,7 @@ def pretrain_ts(epochs=1000, batch_size=200):
     ts_conv1d_ae_ = ts_conv2d_ae
     if exists(cp_path):
         ts_conv1d_ae_ = load_model(cp_path)
-    ts_conv1d_ae_.fit(dataset.x_features_series_train, x_features_series_train, batch_size=batch_size,
+    ts_conv1d_ae_.fit(x_features_series_train, x_features_series_train, batch_size=batch_size,
                       epochs=epochs,
                       callbacks=[cp])
 
@@ -237,6 +237,7 @@ def visualize_centroids():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DSAE')
+    parser.add_argument('--dataset', type=str, required=True)
     parser.add_argument('--results_path', default='results/default', type=str)
     parser.add_argument('--alpha', default=ALPHA, type=float)
     parser.add_argument('--beta', default=BETA, type=float)
@@ -259,20 +260,20 @@ if __name__ == '__main__':
     log('results_path:{} , loss weight:{},{},{}, no_pretrain:{}, no_joint_train:{}'.format(results_path, alpha, beta,
                                                                                            gamma,
                                                                                            no_pretrain, no_joint_train))
-
-    x_RP_train = dataset.x_RP_train
-    x_RP_test = dataset.x_RP_test
-    x_features_series_train = dataset.x_features_series_train
-    x_features_series_test = dataset.x_features_series_test
-    x_centroids_train = dataset.x_centroids_train
-    x_centroids_test = dataset.x_centroids_test
-    y_train = dataset.y_train
-    y_test = dataset.y_test
+    data_set = dataset_factory.Dataset(args.dataset)
+    x_RP_train = data_set.x_RP_train
+    x_RP_test = data_set.x_RP_test
+    x_features_series_train = data_set.x_features_series_train
+    x_features_series_test = data_set.x_features_series_test
+    x_centroids_train = data_set.x_centroids_train
+    x_centroids_test = data_set.x_centroids_test
+    y_train = data_set.y_train
+    y_test = data_set.y_test
 
     EMB_DIM = x_centroids_train.shape[2]
 
     epochs = 30
-    batch_size = 300
+    batch_size = 150
     """ note: each autoencoder has same embedding,
      embedding will be concated to match EMB_DIM, 
     i.e. centroids has dim EMB_DIM"""
@@ -302,7 +303,7 @@ if __name__ == '__main__':
         train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
     else:
         t0 = time.time()
-        pretrain_RP(epoch1, batch_size)
+        # pretrain_RP(epoch1, batch_size)
         t1 = time.time()
         log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
         pretrain_ts(epoch2, batch_size)
