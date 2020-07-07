@@ -16,7 +16,7 @@ from CONV2D_AE import CONV2D_AE
 from TS_CONV2D_AE import TS_CONV2D_AE
 from dataset_generation import *
 from params import TOTAL_EMBEDDING_DIM, MULTI_GPU
-from trajectory_extraction import modes_to_use
+from geolife_trajectory_extraction import modes_to_use
 from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 
 

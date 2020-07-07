@@ -5,7 +5,7 @@ from sklearn.svm import SVC
 from dataset import *
 # from dataset_generation import *
 from params import FEATURES_SET_1
-from trajectory_extraction import modes_to_use
+from geolife_trajectory_extraction import modes_to_use
 
 #RandomForestClassifier(),SVC(),KNeighborsClassifier(),   MLPClassifier(), DecisionTreeClassifier(),
 ml_models = [ RandomForestClassifier() ]

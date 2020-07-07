@@ -8,7 +8,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 
 from dataset_generation import *
 from params import MAX_SEGMENT_SIZE, FEATURES_SET_1
-from trajectory_extraction import modes_to_use
+from geolife_trajectory_extraction import modes_to_use
 
 
 def RNN_Softmax(timesteps, embedding_dim, n_features, n_class):

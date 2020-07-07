@@ -11,7 +11,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 
 from dataset_generation import *
 from params import FEATURES_SET_1, MAX_SEGMENT_SIZE
-from trajectory_extraction import modes_to_use
+from geolife_trajectory_extraction import modes_to_use
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
