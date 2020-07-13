@@ -13,7 +13,7 @@ from params import *
 from utils import datatime_to_timestamp
 
 # Null=0, Still=1, Walking=2, Run=3, Bike=4, Car=5, Bus=6, Train=7, Subway=8
-use_modes = [2, 3, 4, 5, 6, 7, 8] #    7,8 are merged to 7
+use_modes = [2,  4, 5, 6, 7, 8] #    7,8 are merged to 7
 print('use_modes:', use_modes)
 
 def process_labels(labels_file_path, locations_file_path):
@@ -36,8 +36,8 @@ def process_labels(labels_file_path, locations_file_path):
         # make the label index of modes same as geolife
         if label == 2:
             label = 0
-        if label == 3:
-            label = 2
+        # if label == 3:
+        #     label = 0
         if label == 4:
             label = 1
         if label == 5:
@@ -70,9 +70,12 @@ if __name__ == '__main__':
     trjs = []
     trjs_labels = []
     read_all_folders('/mnt/e/DATASET/SHLDataset_User1Hips_v1/release/User1')
+    # read_all_folders('/mnt/e/DATASET/SHLDataset_preview_v1/User3')
     trjs = np.array(trjs)
     labels = np.array(trjs_labels)
     trjs, labels = shuffle(trjs, labels, random_state=0)
+    # trjs = trjs[:200]
+    # labels = labels[:200]
 
     print('saving files...')
     if not os.path.exists('./data/SHL_extracted/'):

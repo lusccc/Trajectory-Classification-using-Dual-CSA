@@ -23,7 +23,8 @@ SPEED_LIMIT = {0: 7, 1: 12, 2: 120. / 3.6, 3: 180. / 3.6, 4: 120 / 3.6, }
 # acceleration
 ACC_LIMIT = {0: 3, 1: 3, 2: 2, 3: 10, 4: 3, 5: 3}
 # TODO  heading change rate limit, not sure
-HCR_LIMIT = {0: 30, 1: 60, 2: 70, 3: 120, 4: 30}  # {0: 30, 1: 50, 2: 60, 3: 90, 4: 20}
+# HCR_LIMIT = {0: 30, 1: 60, 2: 70, 3: 120, 4: 30}  # {0: 30, 1: 50, 2: 60, 3: 90, 4: 20}
+HCR_LIMIT = {0: 360, 1: 360, 2: 70, 3: 120, 4: 30}  # {0: 30, 1: 50, 2: 60, 3: 90, 4: 20}
 # TODO  changeable !!!!!
 STOP_DISTANCE_LIMIT = 3  # meters, previous is 2
 STOP_VELOCITY_LIMIT = 2
@@ -321,7 +322,7 @@ def random_drop_points(trjs, percentage=0.1):
 if __name__ == '__main__':
     start = time.time()
     parser = argparse.ArgumentParser(description='TRJ_SEG_FEATURE')
-    parser.add_argument('--dataset', type=str, required=True)
+    parser.add_argument('--dataset', type=str, default='SHL')
     parser.add_argument('--feature_set', type=str)
     parser.add_argument('--trjs_path', type=str)
     parser.add_argument('--labels_path', type=str)
@@ -336,7 +337,6 @@ if __name__ == '__main__':
     else:
         feature_set = [int(item) for item in args.feature_set.split(',')]
     print('feature_set:{}'.format(feature_set))
-
     n_cpus = multiprocessing.cpu_count()
     print('n_thread:{}'.format(n_cpus))
     pool = multiprocessing.Pool(processes=n_cpus)
@@ -364,9 +364,11 @@ if __name__ == '__main__':
     print('Running time: %s Seconds' % (end - start))
 
     print('saving files...')
-    dataset = args.dataset
+    dataset = str(args.dataset)
     if not os.path.exists(f'./data/{dataset}_features/'):
         os.makedirs(f'./data/{dataset}_features/')
+    np.save(f'./data/{dataset}_features/trjs_segs_features_{args.save_file_suffix}_noscale.npy',
+            trjs_segs_features[:, :, :, feature_set])
     np.save(f'./data/{dataset}_features/trjs_segs_features_{args.save_file_suffix}.npy',
             scale_segs_each_features(trjs_segs_features[:, :, :, feature_set]))  # note scaled!
     np.save(f'./data/{dataset}_features/trjs_segs_features_labels_{args.save_file_suffix}.npy',

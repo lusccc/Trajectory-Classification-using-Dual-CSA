@@ -117,7 +117,7 @@ if __name__ == '__main__':
     trjs = np.array(trjs)
     labels = np.array(trjs_labels)
 
-    trjs, labels = shuffle(trjs, labels, random_state=0)
+    trjs, labels = shuffle(trjs, labels, random_state=10086)
 
     print('saving files...')
     if not os.path.exists('./data/geolife_extracted/'):
@@ -128,7 +128,7 @@ if __name__ == '__main__':
         = train_test_split(
         trjs,
         labels,
-        test_size=0.20, random_state=7, shuffle=False  # already shuffled, no shuffle here
+        test_size=0.20, random_state=10086, shuffle=False  # already shuffled, no shuffle here
     )
 
     np.save('./data/geolife_extracted/trjs_train.npy', trjs_train)

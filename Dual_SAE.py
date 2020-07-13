@@ -273,7 +273,7 @@ if __name__ == '__main__':
     EMB_DIM = x_centroids_train.shape[2]
 
     epochs = 30
-    batch_size = 150
+    batch_size = 360
     """ note: each autoencoder has same embedding,
      embedding will be concated to match EMB_DIM, 
     i.e. centroids has dim EMB_DIM"""
@@ -303,7 +303,7 @@ if __name__ == '__main__':
         train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
     else:
         t0 = time.time()
-        # pretrain_RP(epoch1, batch_size)
+        pretrain_RP(epoch1, batch_size)
         t1 = time.time()
         log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
         pretrain_ts(epoch2, batch_size)

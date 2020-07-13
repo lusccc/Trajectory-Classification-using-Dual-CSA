@@ -79,8 +79,9 @@ if __name__ == '__main__':
     # produce centroids for random down sampling test set
     parser.add_argument('--produce_centroids_for_specific_test', default='None', type=str)
     parser.add_argument('--save_path', default='None', type=str)
+    parser.add_argument('--dim', default=TOTAL_EMBEDDING_DIM, type=int)
     args = parser.parse_args()
-    pedcc = PEDDC(TOTAL_EMBEDDING_DIM)
+    pedcc = PEDDC(args.dim)
     scale = True
     dataset = args.dataset
     if args.produce_centroids_for_specific_test is 'None':
