@@ -1,13 +1,10 @@
 import argparse
-import os
 import pathlib
 import time
 from os.path import exists
 
-import matplotlib.pyplot as plt
-import seaborn as sns
 from keras import backend as K
-from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 # from tensorflow.keras.callbacks import TensorBoard
 from keras.engine.saving import load_model
 from keras.layers import Input
@@ -19,8 +16,8 @@ from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
 
 import dataset_factory
-from CONV2D_AE import CONV2D_AE
-from TS_CONV2D_AE import TS_CONV2D_AE
+from network.CONV2D_AE import CONV2D_AE
+from network.TS_CONV2D_AE import TS_CONV2D_AE
 import numpy as np
 from utils import visualizeData
 from params import *
@@ -77,7 +74,8 @@ def RP_Conv2D_AE():
 
 def ts_Conv2d_AE():
     n_features = x_features_series_train.shape[3]
-    ts_conv_ae = TS_CONV2D_AE((1, MAX_SEGMENT_SIZE, n_features), each_embedding_dim, n_features, 'ts', results_path)
+    seg_size = x_features_series_train.shape[2]
+    ts_conv_ae = TS_CONV2D_AE((1, seg_size, n_features), each_embedding_dim, n_features, 'ts', results_path)
     if MULTI_GPU:
         ts_conv_ae = multi_gpu_model(ts_conv_ae, gpus=2)
     ts_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
@@ -238,7 +236,7 @@ def visualize_centroids():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DSAE')
     parser.add_argument('--dataset', type=str, required=True)
-    parser.add_argument('--results_path', default='results/default', type=str)
+    parser.add_argument('--results_path', default='../results/default', type=str)
     parser.add_argument('--alpha', default=ALPHA, type=float)
     parser.add_argument('--beta', default=BETA, type=float)
     parser.add_argument('--gamma', default=GAMMA, type=float)
@@ -279,7 +277,7 @@ if __name__ == '__main__':
     i.e. centroids has dim EMB_DIM"""
     n_ae = 2  # num of ae
     each_embedding_dim = int(EMB_DIM / n_ae)
-    patience = 100
+    patience = 50
 
     if no_joint_train:
         loss_weights = [0, 1, 0]

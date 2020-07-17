@@ -2,10 +2,9 @@ import os
 import time
 
 from keras.engine.saving import load_model
-import numpy as np
 from sklearn.metrics import confusion_matrix, classification_report
 
-from Dual_SAE import student_t, N_CLASS, modes_to_use
+from network.Dual_SAE import student_t, N_CLASS, modes_to_use
 from dataset_factory import *
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"

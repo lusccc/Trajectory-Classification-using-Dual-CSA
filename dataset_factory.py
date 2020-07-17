@@ -24,3 +24,14 @@ class Dataset:
             self.y_train = np.load('./data/SHL_features/trjs_segs_features_labels_train.npy', )
             self.y_test = np.load('./data/SHL_features/trjs_segs_features_labels_test.npy', )
             print('centroids shape:{}'.format(self.x_centroids_train.shape))
+
+if __name__ == '__main__':
+    data_set = Dataset('geolife')
+    x_RP_train = data_set.x_RP_train
+    x_RP_test = data_set.x_RP_test
+    x_features_series_train = data_set.x_features_series_train
+    x_features_series_test = data_set.x_features_series_test
+    x_centroids_train = data_set.x_centroids_train
+    x_centroids_test = data_set.x_centroids_test
+    y_train = data_set.y_train
+    y_test = data_set.y_test

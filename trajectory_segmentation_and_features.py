@@ -11,7 +11,7 @@ from sklearn.utils import shuffle
 from params import *
 
 from utils import timestamp_to_hour, scale_segs_each_features
-from geolife_trajectory_extraction import MODE_NAMES
+from Geolife_trajectory_extraction import MODE_NAMES
 from utils import segment_single_series, check_lat_lng, calc_initial_compass_bearing, interp_single_series
 
 # 0,    1,    2,   3,         4           5
@@ -35,7 +35,7 @@ def do_segment_trjs(trjs, labels):
     trjs_segs = []
     trjs_segs_labels = []
     for trj, label in zip(trjs, labels):
-        trj_segs = segment_single_series(trj)
+        trj_segs = segment_single_series(trj, max_size=seg_size)
         trj_segs_labels = [label for _ in range(len(trj_segs))]
         trjs_segs.extend(trj_segs)
         trjs_segs_labels.extend(trj_segs_labels)
@@ -186,16 +186,16 @@ def do_calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_fu
             continue
         trj_seg_features = np.array(
             [[delta_t, hour, d, v, a, h, hc, hcr, s, tn] for delta_t, hour, d, v, a, h, hc, hcr, s, tn in
-             zip(fill_series_function(delta_times),
-                 fill_series_function(hours),
-                 fill_series_function(distances),
-                 fill_series_function(velocities),
-                 fill_series_function(accelerations),
-                 fill_series_function(headings),
-                 fill_series_function(heading_changes),
-                 fill_series_function(heading_change_rates),
-                 fill_series_function(stops),
-                 fill_series_function(turnings))]
+             zip(fill_series_function(delta_times, target_size=seg_size),
+                 fill_series_function(hours, target_size=seg_size),
+                 fill_series_function(distances, target_size=seg_size),
+                 fill_series_function(velocities, target_size=seg_size),
+                 fill_series_function(accelerations, target_size=seg_size),
+                 fill_series_function(headings, target_size=seg_size),
+                 fill_series_function(heading_changes, target_size=seg_size),
+                 fill_series_function(heading_change_rates, target_size=seg_size),
+                 fill_series_function(stops, target_size=seg_size),
+                 fill_series_function(turnings, target_size=seg_size))]
         )
         trj_seg_features = np.expand_dims(trj_seg_features, axis=0)
         trjs_segs_features.append(trj_seg_features)
@@ -288,16 +288,16 @@ def calc_trjs_segs_noise_features(trjs_segs, trjs_segs_labels, valid_trjs_segs):
             continue
         trj_seg_features = np.array(
             [[delta_t, hour, d, v, a, h, hc, hcr, s, tn] for delta_t, hour, d, v, a, h, hc, hcr, s, tn in
-             zip(fill_series_function(delta_times),
-                 fill_series_function(hours),
-                 fill_series_function(distances),
-                 fill_series_function(velocities),
-                 fill_series_function(accelerations),
-                 fill_series_function(headings),
-                 fill_series_function(heading_changes),
-                 fill_series_function(heading_change_rates),
-                 fill_series_function(stops),
-                 fill_series_function(turnings))]
+             zip(fill_series_function(delta_times, target_size=seg_size),
+                 fill_series_function(hours, target_size=seg_size),
+                 fill_series_function(distances, target_size=seg_size),
+                 fill_series_function(velocities, target_size=seg_size),
+                 fill_series_function(accelerations, target_size=seg_size),
+                 fill_series_function(headings, target_size=seg_size),
+                 fill_series_function(heading_changes, target_size=seg_size),
+                 fill_series_function(heading_change_rates, target_size=seg_size),
+                 fill_series_function(stops, target_size=seg_size),
+                 fill_series_function(turnings, target_size=seg_size))]
         )
         trj_seg_features = np.expand_dims(trj_seg_features, axis=0)
         trjs_segs_features.append(trj_seg_features)
@@ -322,30 +322,32 @@ def random_drop_points(trjs, percentage=0.1):
 if __name__ == '__main__':
     start = time.time()
     parser = argparse.ArgumentParser(description='TRJ_SEG_FEATURE')
-    parser.add_argument('--dataset', type=str, default='SHL')
-    parser.add_argument('--feature_set', type=str)
     parser.add_argument('--trjs_path', type=str)
     parser.add_argument('--labels_path', type=str)
-    parser.add_argument('--save_file_suffix', type=str, default='train')
+    parser.add_argument('--seg_size', type=int, default=MAX_SEGMENT_SIZE)
+    parser.add_argument('--feature_set', type=str)
+    parser.add_argument('--data_type', type=str) # train or test
+    parser.add_argument('--save_dir', type=str)
     # note！！！: after random drop points in trajectory,
     # the produced features series will have the different number of samples to the original features series
     parser.add_argument('--random_drop_percentage', type=float, default='0.')
 
     args = parser.parse_args()
+    seg_size = args.seg_size
     if args.feature_set is None:
         feature_set = FEATURES_SET_1
     else:
         feature_set = [int(item) for item in args.feature_set.split(',')]
-    print('feature_set:{}'.format(feature_set))
+    print(f'feature_set:{feature_set}')
     n_cpus = multiprocessing.cpu_count()
-    print('n_thread:{}'.format(n_cpus))
+    print(f'n_thread:{n_cpus}')
     pool = multiprocessing.Pool(processes=n_cpus)
 
     trjs = np.load(args.trjs_path, allow_pickle=True)
     labels = np.load(args.labels_path, allow_pickle=True)
 
     if args.random_drop_percentage:
-        print('random_drop_percentage:{}'.format(args.random_drop_percentage))
+        print(f'random_drop_percentage:{args.random_drop_percentage}')
         trjs = random_drop_points(trjs, args.random_drop_percentage)
 
     fill_series_function = interp_single_series
@@ -364,12 +366,13 @@ if __name__ == '__main__':
     print('Running time: %s Seconds' % (end - start))
 
     print('saving files...')
-    dataset = str(args.dataset)
-    if not os.path.exists(f'./data/{dataset}_features/'):
-        os.makedirs(f'./data/{dataset}_features/')
-    np.save(f'./data/{dataset}_features/trjs_segs_features_{args.save_file_suffix}_noscale.npy',
+    save_dir = args.save_dir
+    data_type = args.data_type
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    np.save(f'{save_dir}/trjs_segs_features_{data_type}_noscale.npy',
             trjs_segs_features[:, :, :, feature_set])
-    np.save(f'./data/{dataset}_features/trjs_segs_features_{args.save_file_suffix}.npy',
-            scale_segs_each_features(trjs_segs_features[:, :, :, feature_set]))  # note scaled!
-    np.save(f'./data/{dataset}_features/trjs_segs_features_labels_{args.save_file_suffix}.npy',
+    np.save(f'{save_dir}/trjs_segs_features_{data_type}.npy',
+            scale_segs_each_features(trjs_segs_features[:, :, :, feature_set]))  # note: scaled!
+    np.save(f'{save_dir}/trjs_segs_features_labels_{data_type}.npy',
             to_categorical(trjs_segs_features_labels, num_classes=N_CLASS))  # labels to one-hot

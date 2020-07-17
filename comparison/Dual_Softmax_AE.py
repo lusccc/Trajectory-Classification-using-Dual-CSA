@@ -12,11 +12,11 @@ from keras.models import Model
 from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
 
-from CONV2D_AE import CONV2D_AE
-from TS_CONV2D_AE import TS_CONV2D_AE
+from network.CONV2D_AE import CONV2D_AE
+from network.TS_CONV2D_AE import TS_CONV2D_AE
 from dataset_generation import *
-from params import TOTAL_EMBEDDING_DIM, MULTI_GPU
-from geolife_trajectory_extraction import modes_to_use
+from params import MULTI_GPU
+from Geolife_trajectory_extraction import modes_to_use
 from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 
 

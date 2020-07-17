@@ -1,23 +1,29 @@
 from keras import Sequential
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 from keras.engine.saving import load_model
-from keras.layers import LSTM, Dense
+from keras.layers import Dense, SimpleRNN
 from keras.optimizers import Adam
 from keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, classification_report
 
 from dataset_generation import *
 from params import MAX_SEGMENT_SIZE, FEATURES_SET_1
-from geolife_trajectory_extraction import modes_to_use
+from Geolife_trajectory_extraction import modes_to_use
 
 
-def LSTM_Softmax(timesteps, embedding_dim, n_features, n_class):
+def RNN_Softmax(timesteps, embedding_dim, n_features, n_class):
     model = Sequential()
-    model.add(LSTM(int(embedding_dim), input_shape=(timesteps, n_features)))
+    model.add(SimpleRNN(
+        # for batch_input_shape, if using tensorflow as the backend, we have to put None for the batch_size.
+        # Otherwise, model.evaluate() will get error.
+        batch_input_shape=(None, timesteps, n_features),
+        output_dim=int(embedding_dim),
+        unroll=True,
+    ))
     model.add(Dense(n_class, activation='softmax'))
     model.summary()
 
-    plot_model(model, to_file='./comparison_results/lstm_softmax.png', show_shapes=True)
+    plot_model(model, to_file='./comparison_results/rnn_softmax.png', show_shapes=True)
 
     learning_rate = 1e-3
 
@@ -29,7 +35,7 @@ def LSTM_Softmax(timesteps, embedding_dim, n_features, n_class):
 
 def train(epochs=100, batch_size=200):
     factor = 1. / np.cbrt(2)
-    model_checkpoint = ModelCheckpoint("./comparison_results/lstm_softmax.model", verbose=1,
+    model_checkpoint = ModelCheckpoint("./comparison_results/rnn_softmax.model", verbose=1,
                                        monitor='val_acc', save_best_only=True, mode='max')
     reduce_lr = ReduceLROnPlateau(monitor='loss', patience=100, mode='auto',
                                   factor=factor, cooldown=0, min_lr=1e-4, verbose=2)
@@ -48,7 +54,7 @@ def train(epochs=100, batch_size=200):
 
 
 def show_confusion_matrix():
-    model = load_model('./comparison_results/lstm_softmax.model', custom_objects={'N_CLASS': N_CLASS})
+    model = load_model('./comparison_results/rnn_softmax.model', custom_objects={'N_CLASS': N_CLASS})
     pred = model.predict([np.squeeze(x_features_series_test)])
     y_pred = np.argmax(pred, axis=1)
     y_true = np.argmax(y_test, axis=1)
@@ -60,7 +66,7 @@ def show_confusion_matrix():
 
 
 if __name__ == "__main__":
-    model = LSTM_Softmax(MAX_SEGMENT_SIZE, 32, len(FEATURES_SET_1), N_CLASS)
+    model = RNN_Softmax(MAX_SEGMENT_SIZE, 32, len(FEATURES_SET_1), N_CLASS)
     patience = 35
     train(3000)
     show_confusion_matrix()
