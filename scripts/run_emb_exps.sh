@@ -1,9 +1,15 @@
 # other parameters fixed to:
-#m = 8, τ = 8, α = 1, β = 3, γ = 1
-for i in `seq 16 8 192`
+#dim=tau=9, loss_weight=1,3,1
+cd ..
+for i in `seq 8 8 192`
 do
-    mkdir -p "./results/emb${i}/"
-    cp ./results/default/RP_conv_ae_check_point.model "./results/emb${i}/"
-    cp ./results/default/ts_conv_ae_check_point.model "./results/emb${i}/"
-    python Dual_SAE.py --results_path "./results/emb${i}/" --dataset geolife
+    path="./results/rep1_emb${i}/"
+    mkdir -p ${path}
+    # copy trained autoencoder weight files. no need to pretrain
+    cp ./results/best_dual_ae_model/RP_conv_ae_check_point.model ${path}
+    cp ./results/best_dual_ae_model/ts_conv_ae_check_point.model ${path}
+    python ./PEDCC.py --features_path ./data/geolife_features/trjs_segs_features_train.npy  --save_dir ./data/geolife_features --data_type train --dim ${i}
+    python ./PEDCC.py --features_path ./data/geolife_features/trjs_segs_features_test.npy  --save_dir ./data/geolife_features --data_type test --dim ${i}
+
+    python -m network.Dual_SAE --dataset geolife --results_path ${path}
 done

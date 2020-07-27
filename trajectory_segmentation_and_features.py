@@ -31,7 +31,7 @@ STOP_VELOCITY_LIMIT = 2
 STRAIGHT_MOVING_DEGREE_LIMIT = 30  # abs value, less than this limit mean still straight
 
 
-def do_segment_trjs(trjs, labels):
+def do_segment_trjs(trjs, labels, seg_size):
     trjs_segs = []
     trjs_segs_labels = []
     for trj, label in zip(trjs, labels):
@@ -42,15 +42,14 @@ def do_segment_trjs(trjs, labels):
     return np.array(trjs_segs), np.array(trjs_segs_labels)
 
 
-def segment_trjs(trjs, labels):
+def segment_trjs(trjs, labels, seg_size):
     tasks = []
     batch_size = int(len(trjs) / n_cpus + 1)
     for i in range(0, n_cpus):
         tasks.append(pool.apply_async(do_segment_trjs, (
-            trjs[i * batch_size:(i + 1) * batch_size], labels[i * batch_size:(i + 1) * batch_size])))
+            trjs[i * batch_size:(i + 1) * batch_size], labels[i * batch_size:(i + 1) * batch_size], seg_size)))
 
     res = np.array([[t.get()[0], t.get()[1]] for t in tasks])
-    print(np.shape(res))
     trjs_segs = np.concatenate(res[:, 0])
     trjs_segs_labels = np.concatenate(res[:, 1])
     return trjs_segs, trjs_segs_labels
@@ -106,13 +105,12 @@ def filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels):
                                       (trjs_segs[i * batch_size:(i + 1) * batch_size],
                                        trjs_segs_labels[i * batch_size:(i + 1) * batch_size])))
     res = np.array([[t.get()[0], t.get()[1]] for t in tasks])
-    print(np.shape(res))
     trjs_segs = np.concatenate(res[:, 0])
     trjs_segs_labels = np.concatenate(res[:, 1])
     return trjs_segs, trjs_segs_labels
 
 
-def do_calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_function):
+def do_calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_function, seg_size):
     valid_trjs_segs = []
 
     trjs_segs_features = []
@@ -202,19 +200,20 @@ def do_calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_fu
         trjs_segs_features_labels.append(trj_seg_label)
 
         valid_trjs_segs.append(i)
-
+    print('* end a thread for calc_trjs_segs_clean_features')
     return np.array(trjs_segs_features), np.array(trjs_segs_features_labels), valid_trjs_segs
 
 
-def calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_function):
+def calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_function, seg_size):
     tasks = []
     batch_size = int(len(trjs_segs) / n_cpus + 1)
     for i in range(0, n_cpus):
         tasks.append(pool.apply_async(do_calc_trjs_segs_clean_features,
                                       (trjs_segs[i * batch_size:(i + 1) * batch_size],
                                        trjs_segs_labels[i * batch_size:(i + 1) * batch_size],
-                                       fill_series_function)))
+                                       fill_series_function, seg_size)))
     res = np.array([[t.get()[0], t.get()[1]] for t in tasks])
+    print('merging...')
     trjs_segs_features = np.concatenate(res[:, 0])
     trjs_segs_features_labels = np.concatenate(res[:, 1])
     return trjs_segs_features, trjs_segs_features_labels
@@ -353,14 +352,14 @@ if __name__ == '__main__':
     fill_series_function = interp_single_series
 
     print('segment_trjs...')
-    trjs_segs, trjs_segs_labels = segment_trjs(trjs, labels)
-    print(trjs_segs.shape)
+    trjs_segs, trjs_segs_labels = segment_trjs(trjs, labels, seg_size)
+    print(f'segs shape:{trjs_segs.shape}')
     print('filter_trjs_segs_gps_data...')
     trjs_segs, trjs_segs_labels = filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels)
-    print(trjs_segs.shape)
+    print(f'filtered segs shape:{trjs_segs.shape}')
     print('calc_trjs_segs_clean_features...')
     trjs_segs_features, trjs_segs_features_labels = calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels,
-                                                                                  fill_series_function)
+                                                                                  fill_series_function, seg_size)
 
     end = time.time()
     print('Running time: %s Seconds' % (end - start))

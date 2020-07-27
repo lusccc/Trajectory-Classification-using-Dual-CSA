@@ -111,11 +111,10 @@ if __name__ == '__main__':
 
     features_RP_mats = []
     n_features = trjs_segs_features.shape[3]
-    trjs_segs_features = np.reshape(trjs_segs_features, [trjs_segs_features.shape[0], trjs_segs_features.shape[2],
-                                                         trjs_segs_features.shape[3]])
+    trjs_segs_features = np.squeeze(trjs_segs_features)
 
     for i in range(n_features):
-        single_feature_segs = trjs_segs_features[:, :, i]  # (n, 48)
+        single_feature_segs = trjs_segs_features[:, :, i]  # (n, seg_size)
         # generate RP mat for each seg
         feature_RP_mats = gen_multiple_RP_mats(single_feature_segs[:], scale=False, dim=dim, tau=tau)
         feature_RP_mats = np.expand_dims(feature_RP_mats, axis=3)

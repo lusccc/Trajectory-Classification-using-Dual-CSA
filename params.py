@@ -17,8 +17,8 @@ N_CLASS = len(modes_to_use)
 MAX_SEGMENT_SIZE = 184
 MIN_N_POINTS = 10
 
-DIM = 8  # Embedding dimension
-TAU = 8  # Embedding delay
+DIM = 9  # Embedding dimension
+TAU = 9  # Embedding delay
 
 N_VECTORS = MAX_SEGMENT_SIZE - TAU * (DIM - 1)  # RP mat size
 

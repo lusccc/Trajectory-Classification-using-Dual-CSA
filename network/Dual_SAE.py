@@ -24,7 +24,7 @@ from params import *
 import tensorflow as tf
 
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
 config = tf.compat.v1.ConfigProto()
@@ -167,7 +167,7 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200):
                         validation_data=(
                             [x_RP_test, x_centroids_test, x_features_series_test],
                             [x_RP_test, y_test, x_features_series_test]),
-                        callbacks=[early_stopping, cp, visulazation_callback, ],
+                        callbacks=[early_stopping, cp,  ], #visulazation_callback,
                         )
     #
     score = np.argmax(hist.history['val_lambda_1_accuracy'])
@@ -271,7 +271,7 @@ if __name__ == '__main__':
     EMB_DIM = x_centroids_train.shape[2]
 
     epochs = 30
-    batch_size = 360
+    batch_size = 400
     """ note: each autoencoder has same embedding,
      embedding will be concated to match EMB_DIM, 
     i.e. centroids has dim EMB_DIM"""
@@ -301,10 +301,10 @@ if __name__ == '__main__':
         train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
     else:
         t0 = time.time()
-        pretrain_RP(epoch1, batch_size)
+        # pretrain_RP(epoch1, batch_size)
         t1 = time.time()
         log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
-        pretrain_ts(epoch2, batch_size)
+        # pretrain_ts(epoch2, batch_size)
         t2 = time.time()
         log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
         train_classifier(pretrained=True, epochs=3000, batch_size=batch_size)

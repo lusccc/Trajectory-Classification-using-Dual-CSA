@@ -1,7 +1,9 @@
 import math
 
 import numpy as np
-from matplotlib import pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 from numba import jit
 from scipy.interpolate import interp1d
 from sklearn import manifold

@@ -3,8 +3,8 @@ from numpy.random import randn
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from scipy import stats
-train_segs_features = np.load('data/SHL_features/trjs_segs_features_train_noscale.npy')
-labels = np.load('data/SHL_features/trjs_segs_features_labels_train.npy')
+train_segs_features = np.load('../data/SHL_features/trjs_segs_features_train_noscale.npy')
+labels = np.load('../data/SHL_features/trjs_segs_features_labels_train.npy')
 train_segs_features = np.squeeze(train_segs_features)
 print()
 segs_hcrs = []
