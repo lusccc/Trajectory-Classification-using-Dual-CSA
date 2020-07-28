@@ -23,7 +23,7 @@ def calc_tau(trjs_segs_features, n_features, seg_size):
     print(tau_candidates.shape)
     final_tau = np.mean(tau_candidates)  #
     print(f'final_tau:{final_tau}')  # 6.945459946242402 for geolife
-
+    return final_tau
 
 def do_calc_tau(single_feature_segs, seg_size):
     n_bins = int(seg_size / 10.)
@@ -43,17 +43,17 @@ def do_calc_tau(single_feature_segs, seg_size):
         # print(first_local_min)
         tau_candidates.append(first_local_min)
     tau_candidates = np.array(tau_candidates)
-    print('end a thread for calc_tau')
+    print('* end a thread for calc_tau')
     return tau_candidates
 
-def calc_dim(trjs_segs_features, n_features, seg_size):
+def calc_dim(trjs_segs_features, n_features, seg_size, tau):
     tasks = []
     for i in range(n_features):
         single_feature_segs = trjs_segs_features[:, :, i]
         batch_size = int(len(single_feature_segs) / n_cpus + 1)
         for i in range(0, n_cpus):
             tasks.append(pool.apply_async(do_calc_dim, (
-                single_feature_segs[i * batch_size:(i + 1) * batch_size], seg_size)))
+                single_feature_segs[i * batch_size:(i + 1) * batch_size], seg_size, tau)))
     print(f'n_task:{len(tasks)}')
     res = np.array([t.get() for t in tasks])
     dim_candidates = np.hstack(res)
@@ -62,7 +62,7 @@ def calc_dim(trjs_segs_features, n_features, seg_size):
     print(f'final dim:{final_dim}') # 2.5952364749914936 for geolife
 
 
-def do_calc_dim(single_feature_segs, seg_size, tau=18):
+def do_calc_dim(single_feature_segs, seg_size, tau):
     dim_candidates = []
     for single_feature_seg in single_feature_segs:
         for i in range(1, seg_size): # i is dim try to looking for
@@ -78,7 +78,7 @@ def do_calc_dim(single_feature_segs, seg_size, tau=18):
                 dim_candidates.append(i)
                 break
     dim_candidates = np.array(dim_candidates)
-    print('end a thread for calc_dim')
+    print('* end a thread for calc_dim')
     return dim_candidates
 
 if __name__ == '__main__':
@@ -103,8 +103,10 @@ if __name__ == '__main__':
     trjs_segs_features = np.squeeze(trjs_segs_features)
     n_features = trjs_segs_features.shape[2]
     seg_size = trjs_segs_features.shape[1]
-    calc_tau(trjs_segs_features[:], n_features, seg_size)
-    calc_dim(trjs_segs_features[:], n_features, seg_size)
+    print('calc_tau...')
+    tau = calc_tau(trjs_segs_features[:], n_features, seg_size)
+    print('calc_dim...')
+    calc_dim(trjs_segs_features[:], n_features, seg_size, tau)
     print()
     end = time.time()
     print('Running time: %s Seconds' % (end - start))

@@ -14,7 +14,7 @@ modes_to_use = [0,1,2,3,4,] # SHL
 
 N_CLASS = len(modes_to_use)
 
-MAX_SEGMENT_SIZE = 184
+MAX_SEGMENT_SIZE = 152
 MIN_N_POINTS = 10
 
 DIM = 9  # Embedding dimension

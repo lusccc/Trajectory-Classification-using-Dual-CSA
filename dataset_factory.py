@@ -35,3 +35,4 @@ if __name__ == '__main__':
     x_centroids_test = data_set.x_centroids_test
     y_train = data_set.y_train
     y_test = data_set.y_test
+    print()

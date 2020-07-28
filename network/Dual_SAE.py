@@ -23,8 +23,7 @@ from utils import visualizeData
 from params import *
 import tensorflow as tf
 
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
 config = tf.compat.v1.ConfigProto()
@@ -32,6 +31,8 @@ config.gpu_options.allow_growth = True
 config.log_device_placement = True
 session = tf.compat.v1.Session(config=config)
 tf.compat.v1.keras.backend.set_session(session)
+
+
 # do your ML task
 
 
@@ -65,7 +66,14 @@ def RP_Conv2D_AE():
     """ -----RP_conv_ae------"""
     RP_mat_size = x_RP_train.shape[1]  # 40
     n_features = x_RP_train.shape[3]
-    RP_conv_ae = CONV2D_AE((RP_mat_size, RP_mat_size, n_features), each_embedding_dim, n_features, 'RP', results_path)
+    # our network will maxpooling 3 times with size 2, i.e., 8 times smaller.
+    # here we check if the size fit to the network, or we apply zero padding
+    zero_padding = 0
+    if RP_mat_size % 8 != 0:
+        zero_padding = int((int(
+            RP_mat_size / 8) * 8 + 8 - RP_mat_size) / 2)  # divided by 2, because pad to width and height at same time
+    RP_conv_ae = CONV2D_AE((RP_mat_size, RP_mat_size, n_features), each_embedding_dim, n_features, 'RP', results_path,
+                           zero_padding)
     if MULTI_GPU:
         RP_conv_ae = multi_gpu_model(RP_conv_ae, gpus=2)
     RP_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
@@ -75,7 +83,14 @@ def RP_Conv2D_AE():
 def ts_Conv2d_AE():
     n_features = x_features_series_train.shape[3]
     seg_size = x_features_series_train.shape[2]
-    ts_conv_ae = TS_CONV2D_AE((1, seg_size, n_features), each_embedding_dim, n_features, 'ts', results_path)
+    # our network will maxpooling 3 times with size 2, i.e., 8 times smaller.
+    # here we check if the size fit to the network, or we apply zero padding
+    zero_padding = 0
+    if seg_size % 8 != 0:
+        zero_padding = int((int(
+            seg_size / 8) * 8 + 8 - seg_size) / 2)  # divided by 2, because pad to width and height at same time
+
+    ts_conv_ae = TS_CONV2D_AE((1, seg_size, n_features), each_embedding_dim, n_features, 'ts', results_path, zero_padding)
     if MULTI_GPU:
         ts_conv_ae = multi_gpu_model(ts_conv_ae, gpus=2)
     ts_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
@@ -167,12 +182,13 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200):
                         validation_data=(
                             [x_RP_test, x_centroids_test, x_features_series_test],
                             [x_RP_test, y_test, x_features_series_test]),
-                        callbacks=[early_stopping, cp,  ], #visulazation_callback,
+                        callbacks=[early_stopping, cp, ],  # visulazation_callback,
                         )
     #
     score = np.argmax(hist.history['val_lambda_1_accuracy'])
     log('the optimal epoch size: {}, the value of high accuracy {}'.format(hist.epoch[score],
-                                                                           np.max(hist.history['val_lambda_1_accuracy'])))
+                                                                           np.max(
+                                                                               hist.history['val_lambda_1_accuracy'])))
 
 
 class SAE_embedding_visualization_callback(ModelCheckpoint):
@@ -255,6 +271,7 @@ if __name__ == '__main__':
     epoch1 = args.epoch1
     epoch2 = args.epoch2
     pathlib.Path(os.path.join(results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
+    log(f'dataset:{args.dataset}')
     log('results_path:{} , loss weight:{},{},{}, no_pretrain:{}, no_joint_train:{}'.format(results_path, alpha, beta,
                                                                                            gamma,
                                                                                            no_pretrain, no_joint_train))
@@ -269,9 +286,9 @@ if __name__ == '__main__':
     y_test = data_set.y_test
 
     EMB_DIM = x_centroids_train.shape[2]
-
+    log(f'EMB_DIM:{EMB_DIM}')
     epochs = 30
-    batch_size = 400
+    batch_size = 348
     """ note: each autoencoder has same embedding,
      embedding will be concated to match EMB_DIM, 
     i.e. centroids has dim EMB_DIM"""
@@ -301,17 +318,17 @@ if __name__ == '__main__':
         train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
     else:
         t0 = time.time()
-        # pretrain_RP(epoch1, batch_size)
+        pretrain_RP(epoch1, batch_size)
         t1 = time.time()
         log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
-        # pretrain_ts(epoch2, batch_size)
+        pretrain_ts(epoch2, batch_size)
         t2 = time.time()
         log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
+        visualize_dual_ae_embedding()
         train_classifier(pretrained=True, epochs=3000, batch_size=batch_size)
         t3 = time.time()
         log('train_classifier Running time: %s Seconds' % (t3 - t1))
 
     visualize_centroids()
-    visualize_dual_ae_embedding()
     show_confusion_matrix()
     visualize_sae_embedding()

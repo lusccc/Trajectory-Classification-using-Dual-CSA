@@ -37,7 +37,7 @@ def gen_multiple_RP_mats(series, scale=False, dim=DIM, tau=TAU):
         np.sum((phase_vectorss[:, None, :, :] - phase_vectorss[:, :, None, :]) ** 2,
                axis=3, dtype='float32')
     )
-    print('end calc distance_mats end')
+    print('end calc distance_mats')
 
     mycode = False
     if mycode:
