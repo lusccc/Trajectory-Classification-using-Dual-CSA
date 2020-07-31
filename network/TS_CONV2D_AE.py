@@ -7,9 +7,9 @@ from keras.layers import Dense
 from keras.utils import plot_model
 
 
-def TS_CONV2D_AE(input_shape, embedding_dim, n_features, name, results_path, zero_padding=0):
+def TS_CONV1D_AE(input_shape, embedding_dim, n_features, name, results_path, zero_padding=0):
     """
-    time series conv2d ae
+    time series conv ae
     """
     size = input_shape[1]  # series size
     # print('input_shape:', input_shape)

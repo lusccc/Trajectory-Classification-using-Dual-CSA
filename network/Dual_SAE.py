@@ -4,7 +4,7 @@ import time
 from os.path import exists
 
 from keras import backend as K
-from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.callbacks import EarlyStopping, ModelCheckpoint, CSVLogger, Callback
 # from tensorflow.keras.callbacks import TensorBoard
 from keras.engine.saving import load_model
 from keras.layers import Input
@@ -17,15 +17,16 @@ from sklearn.metrics import confusion_matrix, classification_report
 
 import dataset_factory
 from network.CONV2D_AE import CONV2D_AE
-from network.TS_CONV2D_AE import TS_CONV2D_AE
+from network.TS_CONV2D_AE import TS_CONV1D_AE
 import numpy as np
 from utils import visualizeData
 from params import *
 import tensorflow as tf
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
+# make run on low memory machine
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 config.log_device_placement = True
@@ -33,13 +34,10 @@ session = tf.compat.v1.Session(config=config)
 tf.compat.v1.keras.backend.set_session(session)
 
 
-# do your ML task
-
-
 def log(info):
     with open(os.path.join(results_path, 'log.txt'), 'a') as f:
-        print(info)
-        print(info, file=f)
+        print('★ '+info)
+        print('★ ' + info, file=f)
 
 
 def student_t(z, u, alpha=1.):
@@ -80,7 +78,7 @@ def RP_Conv2D_AE():
     return RP_conv_ae
 
 
-def ts_Conv2d_AE():
+def ts_Conv1d_AE():
     n_features = x_features_series_train.shape[3]
     seg_size = x_features_series_train.shape[2]
     # our network will maxpooling 3 times with size 2, i.e., 8 times smaller.
@@ -90,7 +88,8 @@ def ts_Conv2d_AE():
         zero_padding = int((int(
             seg_size / 8) * 8 + 8 - seg_size) / 2)  # divided by 2, because pad to width and height at same time
 
-    ts_conv_ae = TS_CONV2D_AE((1, seg_size, n_features), each_embedding_dim, n_features, 'ts', results_path, zero_padding)
+    ts_conv_ae = TS_CONV1D_AE((1, seg_size, n_features), each_embedding_dim, n_features, 'ts', results_path,
+                              zero_padding)
     if MULTI_GPU:
         ts_conv_ae = multi_gpu_model(ts_conv_ae, gpus=2)
     ts_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
@@ -100,19 +99,19 @@ def ts_Conv2d_AE():
 def dual_SAE():
     """--------SAE----------"""
     concat_embedding = concatenate([RP_conv2d_ae.get_layer('RP_embedding').output,
-                                    ts_conv2d_ae.get_layer('ts_embedding').output])
+                                    ts_conv1d_ae.get_layer('ts_embedding').output])
     centroids_input = Input((N_CLASS, EMB_DIM))
     classification = classification_layer([concat_embedding, centroids_input])
 
     dual_sae = Model(
-        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv2d_ae.get_layer(index=0).input],
+        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv1d_ae.get_layer(index=0).input],
         outputs=[RP_conv2d_ae.get_layer('RP_reconstruction').output, classification,
-                 ts_conv2d_ae.get_layer('ts_reconstruction').output])
+                 ts_conv1d_ae.get_layer('ts_reconstruction').output])
     dual_sae.summary()
     plot_model(dual_sae, to_file=os.path.join(results_path, 'dual_sae.png'), show_shapes=True)
 
     dual_encoder = Model(
-        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv2d_ae.get_layer(index=0).input],
+        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv1d_ae.get_layer(index=0).input],
         outputs=[concat_embedding]
     )
     # dual_encoder.summary()
@@ -120,7 +119,7 @@ def dual_SAE():
 
     if MULTI_GPU:
         dual_sae = multi_gpu_model(dual_sae, gpus=2)
-    dual_sae.compile(loss=['mse', 'kld', 'mse'], loss_weights=loss_weights, optimizer='adam',
+    dual_sae.compile(loss=['mse', 'kld', 'mse'], loss_weights=[var_alpha, var_beta, var_gamma], optimizer='adam',
                      metrics=['accuracy', categorical_accuracy, 'accuracy'])
     return dual_sae, dual_encoder
 
@@ -136,10 +135,14 @@ def pretrain_RP(epochs=1000, batch_size=200):
     cp_path = os.path.join(results_path, 'RP_conv_ae_check_point.model')
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
+    csv_logger = CSVLogger(os.path.join(results_path, 'RP_log.csv'), append=True, separator=';')
+    early_stopping = EarlyStopping(monitor='loss', patience=10, verbose=2)
+
     RP_conv_ae_ = RP_conv2d_ae
     if exists(cp_path):
         RP_conv_ae_ = load_model(cp_path)
-    RP_conv_ae_.fit(x_RP_train, x_RP_train, batch_size=batch_size, epochs=epochs, callbacks=[cp])
+    RP_conv_ae_.fit(x_RP_train, x_RP_train, batch_size=batch_size, epochs=epochs,
+                    callbacks=[cp, csv_logger, early_stopping])
 
 
 def pretrain_ts(epochs=1000, batch_size=200):
@@ -150,12 +153,15 @@ def pretrain_ts(epochs=1000, batch_size=200):
     cp_path = os.path.join(results_path, 'ts_conv_ae_check_point.model')
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
-    ts_conv1d_ae_ = ts_conv2d_ae
+    csv_logger = CSVLogger(os.path.join(results_path, 'ts_log.csv'), append=True, separator=';')
+    early_stopping = EarlyStopping(monitor='loss', patience=10, verbose=2)
+
+    ts_conv1d_ae_ = ts_conv1d_ae
     if exists(cp_path):
         ts_conv1d_ae_ = load_model(cp_path)
     ts_conv1d_ae_.fit(x_features_series_train, x_features_series_train, batch_size=batch_size,
                       epochs=epochs,
-                      callbacks=[cp])
+                      callbacks=[cp, csv_logger, early_stopping])
 
 
 def train_classifier(pretrained=True, epochs=100, batch_size=200):
@@ -165,7 +171,7 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200):
     cp = ModelCheckpoint(cp_path, monitor='val_lambda_1_accuracy',
                          verbose=1,
                          save_best_only=True, mode='max')
-    early_stopping = EarlyStopping(monitor='val_lambda_1_loss', patience=patience, verbose=2)
+    early_stopping = EarlyStopping(monitor='val_lambda_1_accuracy', patience=patience, verbose=2)
     # reduce_lr = ReduceLROnPlateau(monitor='loss', patience=100, mode='auto',
     #                               factor=factor, cooldown=0, min_lr=1e-4, verbose=2)
     visulazation_callback = SAE_embedding_visualization_callback(os.path.join(results_path, 'sae_cp_{epoch}.h5'))
@@ -175,6 +181,8 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200):
         load_model(os.path.join(results_path, 'ts_conv_ae_check_point.model'))
     if exists(cp_path):
         load_model(cp_path)
+    csv_logger = CSVLogger(os.path.join(results_path, 'csa_log.csv'), append=True, separator=';')
+
     hist = dual_sae.fit([x_RP_train, x_centroids_train, x_features_series_train],
                         [x_RP_train, y_train, x_features_series_train],
                         epochs=epochs,
@@ -182,7 +190,10 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200):
                         validation_data=(
                             [x_RP_test, x_centroids_test, x_features_series_test],
                             [x_RP_test, y_test, x_features_series_test]),
-                        callbacks=[early_stopping, cp, ],  # visulazation_callback,
+                        callbacks=[early_stopping, csv_logger,
+                        Dynamic_loss_weights_callback(var_alpha, var_beta, var_gamma)
+                        # visulazation_callback,
+                                   ],
                         )
     #
     score = np.argmax(hist.history['val_lambda_1_accuracy'])
@@ -190,12 +201,60 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200):
                                                                            np.max(
                                                                                hist.history['val_lambda_1_accuracy'])))
 
+#https://github.com/keras-team/keras/issues/2595
+class Dynamic_loss_weights_callback(Callback):
+    def __init__(self, alpha, beta, gamma):
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+
+        self.beta_limit = 1.6
+        self.n_not_improving_step_limit = 4 # 4
+        self.best_acc = 0
+        self.not_improving_step = 0
+
+    # def on_epoch_end(self, epoch, logs):
+    #     acc = logs['val_lambda_1_accuracy']
+    #     if acc > self.best_acc:
+    #         self.best_acc = acc
+    #     log(f'best_acc:{self.best_acc}')
+    #     if epoch % 4 == 0 and epoch > 0:
+    #         if K.get_value(self.beta) + .1 < self.beta_limit:
+    #             K.set_value(self.beta, K.get_value(self.beta) + .15)
+    #             # if K.get_value(self.gamma) - .1 > 0 and K.get_value(self.beta) > 0:
+    #             #     K.set_value(self.alpha, K.get_value(self.alpha) - .1)
+    #             #     K.set_value(self.gamma, K.get_value(self.gamma) - .1)
+    #             log(f'current epoch:{epoch}, change loss weights to :{K.get_value(self.alpha)}, {K.get_value(self.beta)}, {K.get_value(self.gamma)}')
+    def on_epoch_end(self, epoch, logs):
+        acc = logs['val_lambda_1_accuracy']
+        if acc >= self.best_acc:
+            self.not_improving_step = 0
+            self.best_acc = acc
+            log(f'best_acc:{self.best_acc}, not_improving_step:{self.not_improving_step}')
+        else:
+            self.not_improving_step += 1
+            log(f'best_acc:{self.best_acc}, not_improving_step:{self.not_improving_step}')
+            # if self.not_improving_step >= self.n_not_improving_step_limit:
+            #     K.set_value(self.alpha, 0.1)
+            #     K.set_value(self.gamma, 0.1)
+            #     log(f'change loss weights to :{K.get_value(self.alpha)}, {K.get_value(self.beta)}, {K.get_value(self.gamma)}')
+
+            if self.not_improving_step >= self.n_not_improving_step_limit and self.not_improving_step % 3 == 0:
+                if  K.get_value(self.beta) + .1 < self.beta_limit:
+                    K.set_value(self.beta, K.get_value(self.beta) + .1)
+                    if K.get_value(self.gamma) - .1 > 0 and K.get_value(self.beta) > 0:
+                        K.set_value(self.alpha, K.get_value(self.alpha) - .1)
+                        K.set_value(self.gamma, K.get_value(self.gamma) - .1)
+                    log(f'change loss weights to :{K.get_value(self.alpha)}, {K.get_value(self.beta)}, {K.get_value(self.gamma)}')
+
+
+
 
 class SAE_embedding_visualization_callback(ModelCheckpoint):
     def __init__(self, *args, **kwargs):
         super(SAE_embedding_visualization_callback, self).__init__(*args, **kwargs)
 
-    # redefine the save so it only activates after 100 epochs
     def on_epoch_end(self, epoch, logs=None):
         if epoch % 4 == 0:
             embedding = dual_encoder.predict([x_RP_test, x_centroids_test, x_features_series_test])
@@ -252,14 +311,14 @@ def visualize_centroids():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DSAE')
     parser.add_argument('--dataset', type=str, required=True)
-    parser.add_argument('--results_path', default='../results/default', type=str)
+    parser.add_argument('--results_path', default='./results/default', type=str)
     parser.add_argument('--alpha', default=ALPHA, type=float)
     parser.add_argument('--beta', default=BETA, type=float)
     parser.add_argument('--gamma', default=GAMMA, type=float)
     parser.add_argument('--no_pre', default=False, type=bool)
     parser.add_argument('--no_joint', default=False, type=bool)
-    parser.add_argument('--epoch1', default=100, type=int)
-    parser.add_argument('--epoch2', default=350, type=int)
+    parser.add_argument('--epoch1', default=3000, type=int)
+    parser.add_argument('--epoch2', default=3000, type=int)
 
     args = parser.parse_args()
     results_path = args.results_path
@@ -288,7 +347,7 @@ if __name__ == '__main__':
     EMB_DIM = x_centroids_train.shape[2]
     log(f'EMB_DIM:{EMB_DIM}')
     epochs = 30
-    batch_size = 348
+    batch_size =160
     """ note: each autoencoder has same embedding,
      embedding will be concated to match EMB_DIM, 
     i.e. centroids has dim EMB_DIM"""
@@ -297,11 +356,11 @@ if __name__ == '__main__':
     patience = 50
 
     if no_joint_train:
-        loss_weights = [0, 1, 0]
+        var_alpha, var_beta, var_gamma = K.variable(0), K.variable(1), K.variable(0)
     else:
-        loss_weights = [alpha, beta, gamma]
+        var_alpha, var_beta, var_gamma = K.variable(alpha), K.variable(beta), K.variable(gamma)
     RP_conv2d_ae = RP_Conv2D_AE()
-    ts_conv2d_ae = ts_Conv2d_AE()
+    ts_conv1d_ae = ts_Conv1d_AE()
     dual_sae, dual_encoder = dual_SAE()
     # tb = TensorBoard(log_dir=os.path.join(results_path, 'tensorflow_logs'),
     #                  histogram_freq=0,
@@ -318,10 +377,10 @@ if __name__ == '__main__':
         train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
     else:
         t0 = time.time()
-        pretrain_RP(epoch1, batch_size)
+        # pretrain_RP(epoch1, batch_size)
         t1 = time.time()
         log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
-        pretrain_ts(epoch2, batch_size)
+        # pretrain_ts(epoch2, batch_size)
         t2 = time.time()
         log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
         visualize_dual_ae_embedding()

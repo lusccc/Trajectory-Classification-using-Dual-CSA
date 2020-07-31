@@ -87,7 +87,7 @@ if __name__ == '__main__':
     scale = True
 
     pedcc = PEDDC(dim)
-    # load single pedcc for generate train  or test set, because each generating of pedcc is random, we should keep
+    # load single pedcc for generate train or test set, because each generating of pedcc is random, we should keep
     # train and test have same pedcc
     if not os.path.exists(f'{save_dir}/single_pedcc.npy'):
         c = pedcc.generate_center()

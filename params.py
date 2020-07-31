@@ -5,7 +5,7 @@ from sklearn.preprocessing import MinMaxScaler
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
 # if multiple autoencoder exist, say n, each embedding dim will be TOTAL_EMBEDDING_DIM/n
-TOTAL_EMBEDDING_DIM = 96
+TOTAL_EMBEDDING_DIM = 48
 
 # 0,    1,    2,   3,         4           5
 # walk, bike, bus, driving, train/subway, run
@@ -17,8 +17,8 @@ N_CLASS = len(modes_to_use)
 MAX_SEGMENT_SIZE = 152
 MIN_N_POINTS = 10
 
-DIM = 9  # Embedding dimension
-TAU = 9  # Embedding delay
+DIM = 3  # Embedding dimension
+TAU = 7  # Embedding delay
 
 N_VECTORS = MAX_SEGMENT_SIZE - TAU * (DIM - 1)  # RP mat size
 
@@ -39,7 +39,7 @@ FEATURES_SET_1 = [3, 4, 7,8,9]
 FEATURES_SET_2 = [3, 4, 7, 8, 9]
 # loss wight
 ALPHA = 1
-BETA = 3
+BETA = 1
 GAMMA = 1
 
 MULTI_GPU = False

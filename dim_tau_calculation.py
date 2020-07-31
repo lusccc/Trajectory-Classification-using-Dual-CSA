@@ -1,6 +1,7 @@
 import argparse
 import multiprocessing
 import time
+from math import ceil
 
 import numpy as np
 from scipy.signal import argrelextrema
@@ -21,9 +22,9 @@ def calc_tau(trjs_segs_features, n_features, seg_size):
     res = np.array([t.get() for t in tasks])
     tau_candidates = np.hstack(res)
     print(tau_candidates.shape)
-    final_tau = np.mean(tau_candidates)  #
-    print(f'final_tau:{final_tau}')  # 6.945459946242402 for geolife
-    return final_tau
+    final_tau = np.mean(tau_candidates)
+    print(f'final_tau:{final_tau}, ceil:{ceil(final_tau)}')
+    return ceil(final_tau)
 
 def do_calc_tau(single_feature_segs, seg_size):
     n_bins = int(seg_size / 10.)
@@ -58,8 +59,8 @@ def calc_dim(trjs_segs_features, n_features, seg_size, tau):
     res = np.array([t.get() for t in tasks])
     dim_candidates = np.hstack(res)
     print(dim_candidates.shape)
-    final_dim = np.mean(dim_candidates)  #
-    print(f'final dim:{final_dim}') # 2.5952364749914936 for geolife
+    final_dim = np.mean(dim_candidates)
+    print(f'final dim:{final_dim}, ceil:{ceil(final_dim)}')
 
 
 def do_calc_dim(single_feature_segs, seg_size, tau):
@@ -69,7 +70,7 @@ def do_calc_dim(single_feature_segs, seg_size, tau):
             "delay*dimension must be < len(data)"
             if i*tau > seg_size:
                 break
-            fnn_fraction = false_nearest_neighours(single_feature_seg,tau,i) / seg_size # 18 is delay got from calc_tau for geolife
+            fnn_fraction = false_nearest_neighours(single_feature_seg,tau,i) / seg_size
             '''Until the proportion of the false nearest critical point is less than
              5% or the false nearest critical point no longer decreases with 
              the increase of dim, it can be considered that the chaotic attractor 

@@ -1,5 +1,7 @@
 import argparse
 import multiprocessing
+import sys
+import threading
 import time
 from math import cos, pi
 
@@ -89,6 +91,8 @@ def sign(m, n):
 
 
 if __name__ == '__main__':
+    sys.setrecursionlimit(2097152)  # adjust numbers
+    threading.stack_size(134217728)  # for your needs
     start = time.time()
     parser = argparse.ArgumentParser(description='RP_mat')
     parser.add_argument('--dim', default=DIM, type=int)
