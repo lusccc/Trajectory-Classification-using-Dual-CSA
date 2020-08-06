@@ -26,6 +26,7 @@ def calc_tau(trjs_segs_features, n_features, seg_size):
     print(f'final_tau:{final_tau}, ceil:{ceil(final_tau)}')
     return ceil(final_tau)
 
+
 def do_calc_tau(single_feature_segs, seg_size):
     n_bins = int(seg_size / 10.)
     delay_range = int(
@@ -38,7 +39,7 @@ def do_calc_tau(single_feature_segs, seg_size):
             mis.append(mi)
         mis = np.array(mis)
         local_mins = argrelextrema(mis, np.less)
-        if len(local_mins[0]) == 0: # no local mins
+        if len(local_mins[0]) == 0:  # no local mins
             continue
         first_local_min = local_mins[0][0] + 1  # start from 1, hence+1
         # print(first_local_min)
@@ -46,6 +47,7 @@ def do_calc_tau(single_feature_segs, seg_size):
     tau_candidates = np.array(tau_candidates)
     print('* end a thread for calc_tau')
     return tau_candidates
+
 
 def calc_dim(trjs_segs_features, n_features, seg_size, tau):
     tasks = []
@@ -66,11 +68,11 @@ def calc_dim(trjs_segs_features, n_features, seg_size, tau):
 def do_calc_dim(single_feature_segs, seg_size, tau):
     dim_candidates = []
     for single_feature_seg in single_feature_segs:
-        for i in range(1, seg_size): # i is dim try to looking for
+        for i in range(1, seg_size):  # i is dim try to looking for
             "delay*dimension must be < len(data)"
-            if i*tau > seg_size:
+            if i * tau > seg_size:
                 break
-            fnn_fraction = false_nearest_neighours(single_feature_seg,tau,i) / seg_size
+            fnn_fraction = false_nearest_neighours(single_feature_seg, tau, i) / seg_size
             '''Until the proportion of the false nearest critical point is less than
              5% or the false nearest critical point no longer decreases with 
              the increase of dim, it can be considered that the chaotic attractor 
@@ -81,6 +83,7 @@ def do_calc_dim(single_feature_segs, seg_size, tau):
     dim_candidates = np.array(dim_candidates)
     print('* end a thread for calc_dim')
     return dim_candidates
+
 
 if __name__ == '__main__':
     start = time.time()

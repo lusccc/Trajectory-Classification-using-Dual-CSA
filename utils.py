@@ -1,7 +1,8 @@
 import math
 
-import numpy as np
 import matplotlib
+import numpy as np
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from numba import jit
@@ -12,7 +13,6 @@ from params import SCALER, MAX_SEGMENT_SIZE, MIN_N_POINTS
 import time
 from datetime import datetime
 from sklearn.preprocessing import StandardScaler
-
 
 
 def scale_any_shape_data(data, scaler=SCALER):
@@ -29,6 +29,7 @@ def scale_data(data, scaler=SCALER):
     data = np.array(data)
     data = scaler.fit_transform(data)
     return data
+
 
 def scale_RP_each_feature(RP_all_features):
     scaler = StandardScaler()

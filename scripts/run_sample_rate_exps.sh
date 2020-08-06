@@ -1,9 +1,7 @@
 #!/bin/bash
 percentage=(0.1 0.2 0.3 0.4 0.5 0.6)
 
-
-for i in $(seq 0 1 6)
-do
+for i in $(seq 0 1 6); do
   rm -rf ./data/geolife_features
   path="./results/drop${percentage[${i}]}/"
   mkdir -p "${path}"
@@ -13,5 +11,3 @@ do
   python dataset_generation.py
   python Dual_SAE.py --results_path "${path}"
 done
-
-

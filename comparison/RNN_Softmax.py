@@ -1,3 +1,4 @@
+from dataset_generation import *
 from keras import Sequential
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 from keras.engine.saving import load_model
@@ -6,9 +7,8 @@ from keras.optimizers import Adam
 from keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, classification_report
 
-from dataset_generation import *
-from params import MAX_SEGMENT_SIZE, FEATURES_SET_1
 from Geolife_trajectory_extraction import modes_to_use
+from params import MAX_SEGMENT_SIZE, FEATURES_SET_1
 
 
 def RNN_Softmax(timesteps, embedding_dim, n_features, n_class):

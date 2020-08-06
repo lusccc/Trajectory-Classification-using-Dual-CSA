@@ -1,5 +1,5 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 # from params import MIN_N_POINTS
 
@@ -10,6 +10,6 @@ for trj in trjs:
     if l > 10:
         lens.append(l)
 lens = np.array(lens)
-print(lens.mean()) #597.9427522436769 for geolife
+print(lens.mean())  # 597.9427522436769 for geolife
 plt.hist(lens, 300)
 plt.show()

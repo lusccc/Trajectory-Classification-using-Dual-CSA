@@ -3,6 +3,8 @@ from os.path import exists
 
 import matplotlib.pyplot as plt
 import seaborn as sns
+from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
+from dataset_generation import *
 from keras import backend as K
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint
 from keras.engine.saving import load_model
@@ -14,12 +16,10 @@ from keras.models import Model
 from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
 
-from network.CONV2D_AE import CONV2D_AE
-from comparison.LSTM_AE import LSTM_AE
-from dataset_generation import *
-from params import TOTAL_EMBEDDING_DIM, MULTI_GPU
 from Geolife_trajectory_extraction import modes_to_use
-from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
+from comparison.LSTM_AE import LSTM_AE
+from network.CONV2D_AE import CONV2D_AE
+from params import TOTAL_EMBEDDING_DIM, MULTI_GPU
 from utils import visualizeData
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"

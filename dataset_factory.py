@@ -25,6 +25,7 @@ class Dataset:
             self.y_test = np.load('./data/SHL_features/trjs_segs_features_labels_test.npy', )
             print('centroids shape:{}'.format(self.x_centroids_train.shape))
 
+
 if __name__ == '__main__':
     data_set = Dataset('geolife')
     x_RP_train = data_set.x_RP_train

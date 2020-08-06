@@ -25,7 +25,7 @@ plt.ylabel('accuracy')
 plt.xticks(xi, x, fontsize=8, rotation=60)
 for bar in bars:
     yval = bar.get_height()
-    plt.text(bar.get_x()+0.2, yval,  '%.5f' % yval, va='top', fontsize=8, rotation=90, color='w')
+    plt.text(bar.get_x() + 0.2, yval, '%.5f' % yval, va='top', fontsize=8, rotation=90, color='w')
 bars[11].set_color('r')
 # plt.legend()
 plt.show()

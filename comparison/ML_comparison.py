@@ -2,13 +2,13 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.svm import SVC
 
+from Geolife_trajectory_extraction import modes_to_use
 from dataset_factory import *
 # from dataset_generation import *
 from params import FEATURES_SET_1
-from Geolife_trajectory_extraction import modes_to_use
 
-#RandomForestClassifier(),SVC(),KNeighborsClassifier(),   MLPClassifier(), DecisionTreeClassifier(),
-ml_models = [ RandomForestClassifier() ]
+# RandomForestClassifier(),SVC(),KNeighborsClassifier(),   MLPClassifier(), DecisionTreeClassifier(),
+ml_models = [RandomForestClassifier()]
 
 n_features = len(FEATURES_SET_1)
 x_train = np.squeeze(x_features_series_train)
@@ -26,6 +26,7 @@ for i in range(n_features):
 x_test = np.hstack(x_test_features)
 
 print()
+
 
 def show_confusion_matrix(y_pred):
     print('\n###########')

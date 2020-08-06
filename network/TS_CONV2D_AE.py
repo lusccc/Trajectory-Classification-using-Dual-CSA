@@ -47,5 +47,5 @@ def TS_CONV1D_AE(input_shape, embedding_dim, n_features, name, results_path, zer
     conv_ae.add(Cropping2D(zero_padding, name='{}_reconstruction'.format(name)))  # crop back to input size
     print(f'###summary for {name}###')
     conv_ae.summary()
-    plot_model(conv_ae, to_file=os.path.join(results_path,'{}_conv2d_ae.png'.format(name)), show_shapes=True)
+    plot_model(conv_ae, to_file=os.path.join(results_path, '{}_conv2d_ae.png'.format(name)), show_shapes=True)
     return conv_ae

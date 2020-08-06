@@ -1,14 +1,10 @@
 # borrowed from https://www.kaggle.com/tigurius/introduction-to-taken-s-embedding?select=temperature.csv
 # to find optimal delay and the embedding dimension in phase space reconstruction
 
-import numpy as np # linear algebra
-import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
-import os
-import math #math fun
-import matplotlib.pyplot as plt #plotting
-from mpl_toolkits.mplot3d import Axes3D #3d plots
-from sklearn.neighbors import NearestNeighbors
+import math  # math fun
 
+import numpy as np  # linear algebra
+from sklearn.neighbors import NearestNeighbors
 
 
 def takensEmbedding(data, delay, dimension):

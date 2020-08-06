@@ -1,5 +1,6 @@
 import os
 
+from dataset_generation import *
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 from keras.engine.saving import load_model
 from keras.layers import Conv1D, BatchNormalization, GlobalAveragePooling1D, Permute, Dropout
@@ -9,15 +10,13 @@ from keras.optimizers import Adam
 from keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, classification_report
 
-from dataset_generation import *
-from params import FEATURES_SET_1, MAX_SEGMENT_SIZE
 from Geolife_trajectory_extraction import modes_to_use
+from params import FEATURES_SET_1, MAX_SEGMENT_SIZE
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 def LSTM_FCN_Softmax(timesteps, embedding_dim, n_features, n_class):
-
     ip = Input(shape=(timesteps, n_features))
 
     x = LSTM(int(embedding_dim))(ip)
@@ -50,12 +49,12 @@ def LSTM_FCN_Softmax(timesteps, embedding_dim, n_features, n_class):
 
     learning_rate = 1e-3
 
-
     optm = Adam(lr=learning_rate)
 
     model.compile(optimizer=optm, loss='categorical_crossentropy', metrics=['accuracy'])
 
     return model
+
 
 def train(epochs=100, batch_size=200):
     factor = 1. / np.cbrt(2)
@@ -69,12 +68,13 @@ def train(epochs=100, batch_size=200):
     hist = model.fit(np.squeeze(x_features_series_train), y_train, epochs=epochs,
                      batch_size=batch_size, shuffle=True,
                      validation_data=(
-                            [np.squeeze(x_features_series_test)],
-                            [y_test]),
+                         [np.squeeze(x_features_series_test)],
+                         [y_test]),
                      callbacks=callback_list)
     score = np.argmax(hist.history['val_acc'])
     print('the optimal epoch size: {}, the value of high accuracy {}'.format(hist.epoch[score],
                                                                              np.max(hist.history['val_acc'])))
+
 
 def show_confusion_matrix():
     model = load_model('./comparison_results/lstm_fcn_sofrmax.model', custom_objects={'N_CLASS': N_CLASS})
@@ -89,7 +89,6 @@ def show_confusion_matrix():
 
 
 if __name__ == "__main__":
-
     model = LSTM_FCN_Softmax(MAX_SEGMENT_SIZE, 32, len(FEATURES_SET_1), N_CLASS)
     patience = 35
     train(3000)

@@ -1,9 +1,11 @@
 import os
+import pathlib
 from os.path import exists
 
 import matplotlib.pyplot as plt
-import pathlib
 import seaborn as sns
+from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
+from dataset_generation import *
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint
 from keras.engine.saving import load_model
 from keras.layers import concatenate, Dense
@@ -12,12 +14,10 @@ from keras.models import Model
 from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
 
+from Geolife_trajectory_extraction import modes_to_use
 from network.CONV2D_AE import CONV2D_AE
 from network.TS_CONV2D_AE import TS_CONV1D_AE
-from dataset_generation import *
 from params import MULTI_GPU
-from Geolife_trajectory_extraction import modes_to_use
-from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 
 
 def log(info):

@@ -7,17 +7,17 @@ from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 
-dim_limit = 408
+alpha = (1, 1, 1, 1, 1, 1)
+beta = (1, 2, 3, 4, 5, 6)
+gamma = (1, 1, 1, 1, 1, 1)
 
-dim = [i for i in range(8, dim_limit, 8)]
-
-res_path = 'C:/Users/lsc/Desktop/results_SHL_1,1,1_same_dae_emb8-400'
+res_path = 'C:/Users/lsc/Desktop/exp_res_SHL_all'
 
 
 def read_res_acc(folder_prefix):
     accs = []
-    for i in range(8, dim_limit, 8):
-        exp_path = os.path.join(res_path, f'{folder_prefix}{i}')
+    for al, be, ga in zip(alpha, beta, gamma):
+        exp_path = os.path.join(res_path, f'{folder_prefix}a{al}b{be}y{ga}')
         log_path = os.path.join(exp_path, 'log.txt')
         log = open(log_path, encoding='utf-8').readlines()
         acc = float(log[-2][57:])  # Penultimate line, and only cut acc value
@@ -25,14 +25,14 @@ def read_res_acc(folder_prefix):
     return accs
 
 
-acc_exp1 = read_res_acc('exp1st_SHL_t7s3e')
-acc_exp2 = read_res_acc('exp2nd_SHL_t7s3e')
-acc_exp3 = read_res_acc('exp3rd_SHL_t7s3e')
-acc_exp4 = read_res_acc('exp4th_SHL_t7s3e')
-acc_exp5 = read_res_acc('exp5th_SHL_t7s3e')
-acc_exp6 = read_res_acc('exp6th_SHL_t7s3e')
-acc_exp7 = read_res_acc('exp7th_SHL_t7s3e')
-acc_exp8 = read_res_acc('exp8th_SHL_t7s3e')
+acc_exp1 = read_res_acc('exp1st_SHL_t7s3e136')
+acc_exp2 = read_res_acc('exp2nd_SHL_t7s3e136')
+acc_exp3 = read_res_acc('exp3rd_SHL_t7s3e136')
+acc_exp4 = read_res_acc('exp4th_SHL_t7s3e136')
+acc_exp5 = read_res_acc('exp5th_SHL_t7s3e136')
+acc_exp6 = read_res_acc('exp6th_SHL_t7s3e136')
+acc_exp7 = read_res_acc('exp7th_SHL_t7s3e136')
+acc_exp8 = read_res_acc('exp8th_SHL_t7s3e136')
 
 all_acc = np.array(
     [acc_exp1, acc_exp2, acc_exp3, acc_exp4,
@@ -45,7 +45,7 @@ poly_pipeline = Pipeline([
     ("std_scalar", StandardScaler()),
     ("lr", LinearRegression())
 ])
-x = dim
+x = beta
 X = np.reshape(x, (-1, 1))
 y = mean_acc
 poly_pipeline.fit(X, y)
@@ -63,7 +63,7 @@ plt.show()
 
 def show_bar_chart():
     plt.figure()
-    x = dim
+    x = beta
     # create an index for each tick position
     xi = list(range(len(x)))
     y = mean_acc

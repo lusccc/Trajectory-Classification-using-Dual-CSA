@@ -9,7 +9,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
 from params import *
-
 from utils import datatime_to_timestamp
 
 MODE_NAMES = ['walk', 'bike', 'bus', 'car', 'subway', 'train', 'airplane', 'boat', 'run', 'motorcycle', 'taxi']
@@ -135,4 +134,3 @@ if __name__ == '__main__':
     np.save('./data/geolife_extracted/trjs_test.npy', trjs_test)
     np.save('./data/geolife_extracted/labels_train.npy', labels_train)
     np.save('./data/geolife_extracted/labels_test.npy', labels_test)
-

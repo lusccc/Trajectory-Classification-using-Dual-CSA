@@ -3,6 +3,8 @@ from os.path import exists
 
 import matplotlib.pyplot as plt
 import seaborn as sns
+from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
+from dataset_generation import *
 from keras import backend as K
 from keras.callbacks import EarlyStopping, TensorBoard, ModelCheckpoint
 from keras.engine.saving import load_model
@@ -14,12 +16,10 @@ from keras.models import Model
 from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
 
+from Geolife_trajectory_extraction import modes_to_use
 from network.CONV2D_AE import CONV2D_AE
 from network.TS_CONV2D_AE import TS_CONV1D_AE
-from dataset_generation import *
 from params import TOTAL_EMBEDDING_DIM, MULTI_GPU
-from Geolife_trajectory_extraction import modes_to_use
-from backup.trajectory_features_and_segmentation import MAX_SEGMENT_SIZE
 from utils import visualizeData
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
@@ -89,7 +89,7 @@ def dual_SAE():
     if MULTI_GPU:
         dual_sae = multi_gpu_model(dual_sae, gpus=2)
     dual_sae.compile(loss=['mse', 'kld', 'mse'], loss_weights=loss_weights, optimizer='adam',
-                  metrics=['accuracy', categorical_accuracy, 'accuracy'])
+                     metrics=['accuracy', categorical_accuracy, 'accuracy'])
     return dual_sae, dual_encoder
 
 
@@ -148,7 +148,7 @@ def train_classifier(epochs=100, batch_size=200):
                         validation_data=(
                             [x_RP_test, x_centroids_test, x_features_series_test],
                             [x_RP_test, y_test, x_features_series_test]),
-                        callbacks=[early_stopping, tb, cp,visulazation_callback]
+                        callbacks=[early_stopping, tb, cp, visulazation_callback]
                         )
     #
     score = np.argmax(hist.history['val_lambda_1_acc'])
@@ -166,8 +166,6 @@ class SAE_embedding_visualization_callback(ModelCheckpoint):
             embedding = dual_encoder.predict([x_RP_test, x_centroids_test, x_features_series_test])
             y_true = np.argmax(y_test, axis=1)
             visualizeData(embedding, y_true, N_CLASS, './results/visualization/sae_embedding_epoch{}.png'.format(epoch))
-
-
 
 
 def show_confusion_matrix():

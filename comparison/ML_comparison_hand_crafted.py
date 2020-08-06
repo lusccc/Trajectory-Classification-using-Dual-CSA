@@ -1,15 +1,11 @@
-from sklearn.ensemble import RandomForestClassifier
+import numpy as np
 from sklearn.metrics import confusion_matrix, classification_report
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
-from sklearn.tree import DecisionTreeClassifier
 
-from params import FEATURES_SET_1
 from Geolife_trajectory_extraction import modes_to_use
-import numpy as np
+from params import FEATURES_SET_1
 
 x_features_series_train = np.load('./data/geolife_features/trjs_segs_features_all_features_train.npy', )
 x_features_series_test = np.load('./data/geolife_features/trjs_segs_features_all_features_test.npy', )
@@ -106,5 +102,6 @@ def svc_classification():
     clf.fit(x_handcrafted_train, y_train_)
     y_pred = clf.predict(x_handcrafted_test)
     show_confusion_matrix(y_pred)
+
 
 svc_classification()

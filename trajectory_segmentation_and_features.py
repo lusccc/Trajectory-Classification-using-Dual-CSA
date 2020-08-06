@@ -5,14 +5,10 @@ import time
 import numpy as np
 from geopy.distance import geodesic
 from keras.utils import to_categorical
-from sklearn.model_selection import train_test_split
-from sklearn.utils import shuffle
 
 from params import *
-
-from utils import timestamp_to_hour, scale_segs_each_features
-from Geolife_trajectory_extraction import MODE_NAMES
 from utils import segment_single_series, check_lat_lng, calc_initial_compass_bearing, interp_single_series
+from utils import timestamp_to_hour, scale_segs_each_features
 
 # 0,    1,    2,   3,         4           5
 # walk, bike, bus, driving, train/subway, run
@@ -21,8 +17,8 @@ from utils import segment_single_series, check_lat_lng, calc_initial_compass_bea
 
 SPEED_LIMIT = {0: 7, 1: 12, 2: 120. / 3.6, 3: 180. / 3.6, 4: 120 / 3.6, }
 # acceleration
-ACC_LIMIT = {0: 3, 1: 3, 2: 2, 3: 10, 4: 3, 5: 3}
-# TODO  heading change rate limit, not sure
+ACC_LIMIT = {0: 3, 1: 3, 2: 2, 3: 10, 4: 3, }
+# TODO  heading change rate limit,  calculated on the basis of empirical values
 # HCR_LIMIT = {0: 30, 1: 60, 2: 70, 3: 120, 4: 30}  # {0: 30, 1: 50, 2: 60, 3: 90, 4: 20}
 HCR_LIMIT = {0: 360, 1: 360, 2: 70, 3: 120, 4: 30}  # {0: 30, 1: 50, 2: 60, 3: 90, 4: 20}
 # TODO  changeable !!!!!
@@ -325,7 +321,7 @@ if __name__ == '__main__':
     parser.add_argument('--labels_path', type=str)
     parser.add_argument('--seg_size', type=int, default=MAX_SEGMENT_SIZE)
     parser.add_argument('--feature_set', type=str)
-    parser.add_argument('--data_type', type=str) # train or test
+    parser.add_argument('--data_type', type=str)  # train or test
     parser.add_argument('--save_dir', type=str)
     # note！！！: after random drop points in trajectory,
     # the produced features series will have the different number of samples to the original features series

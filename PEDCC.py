@@ -1,10 +1,8 @@
 import argparse
 
 import numpy as np
-from sklearn.model_selection import train_test_split
 
 from params import *
-
 from utils import scale_any_shape_data
 
 '''
@@ -96,7 +94,7 @@ if __name__ == '__main__':
     else:
         c = np.load(f'{save_dir}/single_pedcc.npy')
         if dim != c.shape[1]:
-            c = pedcc.generate_center() # generate for new dim
+            c = pedcc.generate_center()  # generate for new dim
             print('saving single pedcc')
             np.save(f'{save_dir}/single_pedcc.npy', c)
 
@@ -106,4 +104,3 @@ if __name__ == '__main__':
     centroids = pedcc.repeat(c, n, scale)
     print('saving repeated pedcc')
     np.save(f'{save_dir}/centroids_{data_type}.npy', centroids)
-
