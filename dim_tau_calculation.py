@@ -93,9 +93,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='dimtau')
     parser.add_argument('--feature_set', type=str)
     parser.add_argument('--trjs_segs_features_train_path', type=str,
-                        default='data/geolife_features/trjs_segs_features_train.npy')
+                        default='data/SHL_features/trjs_segs_features_train.npy')
     parser.add_argument('--trjs_segs_features_test_path', type=str,
-                        default='data/geolife_features/trjs_segs_features_test.npy')
+                        default='data/SHL_features/trjs_segs_features_test.npy')
     args = parser.parse_args()
     if args.feature_set is None:
         feature_set = FEATURES_SET_1

@@ -165,7 +165,7 @@ class SAE_embedding_visualization_callback(ModelCheckpoint):
         if epoch % 4 == 0:
             embedding = dual_encoder.predict([x_RP_test, x_centroids_test, x_features_series_test])
             y_true = np.argmax(y_test, axis=1)
-            visualizeData(embedding, y_true, N_CLASS, './results/visualization/sae_embedding_epoch{}.png'.format(epoch))
+            visualizeData(embedding, y_true, N_CLASS, './results/visualization&analysis/sae_embedding_epoch{}.png'.format(epoch))
 
 
 def show_confusion_matrix():
@@ -191,7 +191,7 @@ def visualize_sae_embedding():
     sae = load_model('../results/sae_check_point.model', custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
     embedding = dual_encoder.predict([x_RP_test, x_centroids_test, x_features_series_test])
     y_true = np.argmax(y_test, axis=1)
-    visualizeData(embedding, y_true, N_CLASS, './results/visualization/best.png')
+    visualizeData(embedding, y_true, N_CLASS, './results/visualization&analysis/best.png')
 
 
 def visualize_dual_ae_embedding():
@@ -199,11 +199,11 @@ def visualize_dual_ae_embedding():
     load_model('../results/ts_conv_ae_check_point.model')
     embedding = dual_encoder.predict([x_RP_test, x_centroids_test, x_features_series_test])
     y_true = np.argmax(y_test, axis=1)
-    visualizeData(embedding, y_true, N_CLASS, './results/visualization/dual_ae_embedding.png')
+    visualizeData(embedding, y_true, N_CLASS, './results/visualization&analysis/dual_ae_embedding.png')
 
 
 def visualize_centroids():
-    visualizeData(x_centroids_test[0], modes_to_use, N_CLASS, './results/visualization/centroids_visualization.png')
+    visualizeData(x_centroids_test[0], modes_to_use, N_CLASS, './results/visualization&analysis/centroids_visualization.png')
 
 
 if __name__ == '__main__':

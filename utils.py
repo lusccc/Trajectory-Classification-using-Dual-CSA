@@ -156,14 +156,14 @@ def padzeros(series, target_size=MAX_SEGMENT_SIZE):
     return new_series
 
 
-def visualizeData(Z, labels, num_clusters, title='visualization.png'):
+def visualizeData(Z, labels, num_clusters, title='visualization&analysis.png'):
     '''
-    TSNE visualization of the points in latent space Z
+    TSNE visualization&analysis of the points in latent space Z
     :param Z: Numpy array containing points in latent space in which clustering was performed
     :param labels: True labels - used for coloring points
     :param num_clusters: Total number of clusters
     :param title: filename where the plot should be saved
-    :return: None - (side effect) saves clustering visualization plot in specified location
+    :return: None - (side effect) saves clustering visualization&analysis plot in specified location
     '''
     tsne = manifold.TSNE(n_components=2, init='pca', random_state=0)
     Z_tsne = tsne.fit_transform(Z)

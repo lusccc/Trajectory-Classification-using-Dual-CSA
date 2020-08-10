@@ -1,4 +1,5 @@
 import argparse
+import os
 import pathlib
 import time
 from os.path import exists
@@ -22,7 +23,7 @@ from network.TS_CONV2D_AE import TS_CONV1D_AE
 from params import *
 from utils import visualizeData
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
 # make run on low memory machine
@@ -35,8 +36,11 @@ tf.compat.v1.keras.backend.set_session(session)
 
 def log(info):
     with open(os.path.join(results_path, 'log.txt'), 'a') as f:
-        print('★ ' + info)
-        print('★ ' + info, file=f)
+        print('★ ', end='')
+        print(info)
+        print('★ ', end='', file=f)
+        print(info, file=f)
+
 
 
 def student_t(z, u, alpha=1.):
@@ -74,7 +78,7 @@ def RP_Conv2D_AE():
                            zero_padding)
     if MULTI_GPU:
         RP_conv_ae = multi_gpu_model(RP_conv_ae, gpus=2)
-    RP_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+    RP_conv_ae.compile(optimizer='adam', loss='mse', metrics={'RP_reconstruction': 'mse'})
     return RP_conv_ae
 
 
@@ -92,7 +96,7 @@ def ts_Conv1d_AE():
                               zero_padding)
     if MULTI_GPU:
         ts_conv_ae = multi_gpu_model(ts_conv_ae, gpus=2)
-    ts_conv_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+    ts_conv_ae.compile(optimizer='adam', loss='mse', metrics={'ts_reconstruction': 'mse'})
     return ts_conv_ae
 
 
@@ -140,7 +144,7 @@ def dual_SAE():
 """-----------train---------------"""
 
 
-def pretrain_RP(epochs=1000, batch_size=200):
+def pretrain_RP(epochs=1000, batch_size=200, patience=10):
     """
     pretrain is unsupervised, all data could use to train
     """
@@ -149,7 +153,7 @@ def pretrain_RP(epochs=1000, batch_size=200):
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
     csv_logger = CSVLogger(os.path.join(results_path, 'RP_log.csv'), append=True, separator=';')
-    early_stopping = EarlyStopping(monitor='loss', patience=10, verbose=2)
+    early_stopping = EarlyStopping(monitor='loss', patience=patience, verbose=2)
 
     RP_conv_ae_ = RP_conv2d_ae
     if exists(cp_path):
@@ -158,7 +162,7 @@ def pretrain_RP(epochs=1000, batch_size=200):
                     callbacks=[cp, csv_logger, early_stopping])
 
 
-def pretrain_ts(epochs=1000, batch_size=200):
+def pretrain_ts(epochs=1000, batch_size=200, patience=10):
     """
     pretrain is unsupervised, all data could use to train
     """
@@ -167,7 +171,7 @@ def pretrain_ts(epochs=1000, batch_size=200):
     cp = ModelCheckpoint(cp_path, monitor='loss', verbose=1,
                          save_best_only=True, mode='min')
     csv_logger = CSVLogger(os.path.join(results_path, 'ts_log.csv'), append=True, separator=';')
-    early_stopping = EarlyStopping(monitor='loss', patience=10, verbose=2)
+    early_stopping = EarlyStopping(monitor='loss', patience=patience, verbose=2)
 
     ts_conv1d_ae_ = ts_conv1d_ae
     if exists(cp_path):
@@ -204,7 +208,7 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200):
                             [x_RP_test, y_test, x_features_series_test]),
                         callbacks=[early_stopping, csv_logger,
                                    # Dynamic_loss_weights_callback(var_alpha, var_beta, var_gamma),
-                                   visulazation_callback,
+                                   # visulazation_callback,
                                    cp
                                    ],
                         )
@@ -366,7 +370,7 @@ if __name__ == '__main__':
 
     patience = 30
     epochs = 30
-    batch_size = 170
+    batch_size = 350
     if no_joint_train:
         # var_alpha, var_beta, var_gamma = K.variable(0), K.variable(1), K.variable(0)
         var_alpha, var_beta, var_gamma = 0, 1, 0
@@ -391,10 +395,10 @@ if __name__ == '__main__':
         train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
     else:
         t0 = time.time()
-        # pretrain_RP(epoch1, batch_size)
+        pretrain_RP(epoch1, batch_size, patience=5)
         t1 = time.time()
         log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
-        # pretrain_ts(epoch2, batch_size)
+        pretrain_ts(epoch2, batch_size, patience=5)
         t2 = time.time()
         log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
         visualize_dual_ae_embedding()

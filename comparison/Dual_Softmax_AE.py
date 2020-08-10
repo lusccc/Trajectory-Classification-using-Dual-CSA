@@ -178,7 +178,7 @@ if __name__ == '__main__':
     log('results_path:{} , loss weight:{},{},{}, no_pretrain:{}, no_joint_train:{}'.format(results_path, alpha, beta,
                                                                                            gamma,
                                                                                            no_pretrain, no_joint_train))
-    pathlib.Path(os.path.join(results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(os.path.join(results_path, 'visualization&analysis')).mkdir(parents=True, exist_ok=True)
 
     x_RP_train = Dataset.x_RP_train
     x_RP_test = Dataset.x_RP_test
