@@ -1,5 +1,4 @@
 # coding=utf-8
-# reference to https://heremaps.github.io/pptk/tutorials/viewer/geolife.html
 import os.path
 
 import numpy as np

@@ -11,8 +11,8 @@ from params import *
 from utils import segment_single_series, check_lat_lng, calc_initial_compass_bearing, interp_single_series
 from utils import timestamp_to_hour, scale_segs_each_features
 
-# 0,    1,    2,   3,         4           5
-# walk, bike, bus, driving, train/subway, run
+# 0,    1,    2,   3,         4
+# walk, bike, bus, driving, train/subway,
 
 # limit for different modes:
 
@@ -21,11 +21,14 @@ SPEED_LIMIT = {0: 7, 1: 12, 2: 120. / 3.6, 3: 180. / 3.6, 4: 120 / 3.6, }
 ACC_LIMIT = {0: 3, 1: 3, 2: 2, 3: 10, 4: 3, }
 #   heading change rate limit, on the basis of empirical values
 # HCR_LIMIT = {0: 30, 1: 60, 2: 70, 3: 120, 4: 30}  # {0: 30, 1: 50, 2: 60, 3: 90, 4: 20}
+#           walk,   bike, bus, driving, train/subway,
 HCR_LIMIT = {0: 360, 1: 360, 2: 70, 3: 120, 4: 30}
 #  changeable
 STOP_DISTANCE_LIMIT = 3  # meters, previous is 2
 STOP_VELOCITY_LIMIT = 2
 STRAIGHT_MOVING_DEGREE_LIMIT = 30  # abs value, less than this limit mean still straight
+
+MAX_STAY_TIME_INTERVAL = 300
 
 NO_LIMIT = False
 if NO_LIMIT:
@@ -33,14 +36,27 @@ if NO_LIMIT:
 
 
 def do_segment_trjs(trjs, labels, seg_size):
-    trjs_segs = []
-    trjs_segs_labels = []
+    total_trjs_segs = []
+    total_trjs_segs_labels = []
     for trj, label in zip(trjs, labels):
-        trj_segs = segment_single_series(trj, max_size=seg_size)
-        trj_segs_labels = [label for _ in range(len(trj_segs))]
-        trjs_segs.extend(trj_segs)
-        trjs_segs_labels.extend(trj_segs_labels)
-    return np.array(trjs_segs), np.array(trjs_segs_labels)
+        # first, split based on long stay points
+        delta_ts = np.diff(trj[:,0])
+        split_idx = np.where(delta_ts > MAX_STAY_TIME_INTERVAL)
+        if len(split_idx[0]) > 0:
+            trj_segs = np.split(trj,split_idx[0]+1)
+            trj_segs = [seg for seg in trj_segs if seg.shape[0] > 0]
+            trj_segs_labels = [label for _ in range(len(trj_segs))]
+        else:
+            trj_segs = [trj]
+            trj_segs_labels = [label]
+
+        # second, segment to sub_seg with max_size
+        for trj_seg, trj_seg_label in zip(trj_segs, trj_segs_labels):
+            trj_sub_segs = segment_single_series(trj_seg, max_size=seg_size)
+            trj_sub_segs_labels = [label for _ in range(len(trj_sub_segs))]
+            total_trjs_segs.extend(trj_sub_segs)
+            total_trjs_segs_labels.extend(trj_sub_segs_labels)
+    return np.array(total_trjs_segs), np.array(total_trjs_segs_labels)
 
 
 def segment_trjs(trjs, labels, seg_size):
@@ -79,6 +95,7 @@ def do_filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels):
                 delta_t = t_b - t_a
             else:
                 delta_t = t_b - t_a
+
             if delta_t <= 0:
                 invalid_points.append(i + 1)
                 # print('invalid timestamp, t_a:{}, t_b:{}, delta_t:{}'.format(t_a, t_b, delta_t))
@@ -140,6 +157,9 @@ def do_calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_fu
             t_b = trj_seg[j + 1][0]
 
             delta_t = t_b - t_a
+            if delta_t > MAX_STAY_TIME_INTERVAL:
+                print()
+                continue
             hour = timestamp_to_hour(t_a)
             # distance
             d = geodesic(p_a, p_b).meters
@@ -165,9 +185,9 @@ def do_calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_fu
                 if abs(a) > ACC_LIMIT[trj_seg_label]:
                     # print('invalid acc:{} for {}'.format(a, MODE_NAMES[trj_seg_label]))
                     continue
-                # if tn == 1 and s == 0 and abs(hcr) > HCR_LIMIT[trj_seg_label]:  # ?? or hcr == 0       tn == 1 and s == 0 and
-                #     # print('invalid hcr:{} for {}'.format(hcr, MODE_NAMES[trj_seg_label]))
-                #     continue
+                if abs(hcr) > HCR_LIMIT[trj_seg_label]:  # ?? or hcr == 0       tn == 1 and s == 0 and
+                    # print('invalid hcr:{} for {}'.format(hcr, MODE_NAMES[trj_seg_label]))
+                    continue
 
             delta_times.append(delta_t)
             hours.append(hour)
@@ -187,7 +207,7 @@ def do_calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_fu
             # print('feature element num not enough:{}'.format(len(delta_times)))
             continue
 
-        n_removed_points.append(n_points - len(delta_times))
+        n_removed_points.append(0 if n_points == len(delta_times)+1 else n_points-len(delta_times)+1)
 
         trj_seg_features = np.array(
             [[delta_t, hour, d, v, a, h, hc, hcr, s, tn] for delta_t, hour, d, v, a, h, hc, hcr, s, tn in

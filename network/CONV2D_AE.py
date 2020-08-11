@@ -1,10 +1,9 @@
 import os
 
-from keras import Sequential
-from keras.layers import Conv2D, Flatten, MaxPooling2D, Reshape, UpSampling2D, Conv2DTranspose, Activation, \
-    ZeroPadding2D, Cropping2D
-from keras.layers import Dense
-from keras.utils import plot_model
+from tensorflow.python.keras import Sequential
+from tensorflow.python.keras.layers import Conv2D, ZeroPadding2D, Activation, MaxPooling2D, Flatten, Dense, \
+    Reshape, UpSampling2D, Conv2DTranspose, Cropping2D
+from tensorflow.python.keras.utils.vis_utils import plot_model
 
 
 def CONV2D_AE(input_shape, embedding_dim, n_features, name, results_path, zero_padding=0):

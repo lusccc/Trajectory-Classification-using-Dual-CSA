@@ -4,18 +4,17 @@ import pathlib
 import time
 from os.path import exists
 
+from tensorflow import keras
 import numpy as np
 import tensorflow as tf
-from keras import backend as K, regularizers
-from keras.callbacks import EarlyStopping, ModelCheckpoint, CSVLogger, Callback
+from tensorflow.keras import backend as K
 # from tensorflow.keras.callbacks import TensorBoard
-from keras.engine.saving import load_model
-from keras.layers import Input
-from keras.layers import Lambda, \
-    concatenate
-from keras.models import Model
-from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
+from tensorflow.python.keras import Input, Model, regularizers
+from tensorflow.python.keras.callbacks import ModelCheckpoint, CSVLogger, EarlyStopping, Callback
+from tensorflow.python.keras.layers import concatenate, Lambda
+from tensorflow.python.keras.saving.save import load_model
+from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import dataset_factory
 from network.CONV2D_AE import CONV2D_AE
@@ -23,15 +22,16 @@ from network.TS_CONV2D_AE import TS_CONV1D_AE
 from params import *
 from utils import visualizeData
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
 # make run on low memory machine
-config = tf.compat.v1.ConfigProto()
-config.gpu_options.allow_growth = True
-config.log_device_placement = True
-session = tf.compat.v1.Session(config=config)
-tf.compat.v1.keras.backend.set_session(session)
+# config = tf.compat.v1.ConfigProto()
+# config.gpu_options.allow_growth = True
+# config.log_device_placement = True
+# session = tf.compat.v1.Session(config=config)
+# tf.compat.v1.keras.backend.set_session(session)
+
 
 
 def log(info):
@@ -74,11 +74,11 @@ def RP_Conv2D_AE():
     if RP_mat_size % 8 != 0:
         zero_padding = int((int(
             RP_mat_size / 8) * 8 + 8 - RP_mat_size) / 2)  # divided by 2, because pad to width and height at same time
-    RP_conv_ae = CONV2D_AE((RP_mat_size, RP_mat_size, n_features), RP_emb_dim, n_features, 'RP', results_path,
-                           zero_padding)
-    if MULTI_GPU:
-        RP_conv_ae = multi_gpu_model(RP_conv_ae, gpus=2)
-    RP_conv_ae.compile(optimizer='adam', loss='mse', metrics={'RP_reconstruction': 'mse'})
+
+    with strategy.scope():
+        RP_conv_ae = CONV2D_AE((RP_mat_size, RP_mat_size, n_features), RP_emb_dim, n_features, 'RP', results_path,
+                               zero_padding)
+        RP_conv_ae.compile(optimizer='adam', loss='mse', metrics={'RP_reconstruction': 'mse'})
     return RP_conv_ae
 
 
@@ -92,11 +92,11 @@ def ts_Conv1d_AE():
         zero_padding = int((int(
             seg_size / 8) * 8 + 8 - seg_size) / 2)  # divided by 2, because pad to width and height at same time
 
-    ts_conv_ae = TS_CONV1D_AE((1, seg_size, n_features), ts_emb_dim, n_features, 'ts', results_path,
-                              zero_padding)
-    if MULTI_GPU:
-        ts_conv_ae = multi_gpu_model(ts_conv_ae, gpus=2)
-    ts_conv_ae.compile(optimizer='adam', loss='mse', metrics={'ts_reconstruction': 'mse'})
+
+    with strategy.scope():
+        ts_conv_ae = TS_CONV1D_AE((1, seg_size, n_features), ts_emb_dim, n_features, 'ts', results_path,
+                                  zero_padding)
+        ts_conv_ae.compile(optimizer='adam', loss='mse', metrics={'ts_reconstruction': 'mse'})
     return ts_conv_ae
 
 
@@ -107,37 +107,36 @@ def dual_SAE():
     centroids_input = Input((N_CLASS, TOTAL_EMB_DIM))
     classification = classification_layer([concat_embedding, centroids_input])
     # dense_out = Dense(input_dim=N_CLASS, units=N_CLASS, name='dense_out')(classification)
+    with strategy.scope():
+        dual_sae = Model(
+            inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv1d_ae.get_layer(index=0).input],
+            outputs=[RP_conv2d_ae.get_layer('RP_reconstruction').output, classification,
+                     ts_conv1d_ae.get_layer('ts_reconstruction').output])
+        dual_sae.summary()
+        plot_model(dual_sae, to_file=os.path.join(results_path, 'dual_sae.png'), show_shapes=True)
 
-    dual_sae = Model(
-        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv1d_ae.get_layer(index=0).input],
-        outputs=[RP_conv2d_ae.get_layer('RP_reconstruction').output, classification,
-                 ts_conv1d_ae.get_layer('ts_reconstruction').output])
-    dual_sae.summary()
-    plot_model(dual_sae, to_file=os.path.join(results_path, 'dual_sae.png'), show_shapes=True)
+        dual_encoder = Model(
+            inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv1d_ae.get_layer(index=0).input],
+            outputs=[concat_embedding]
+        )
+        regularizer = regularizers.l2(0.001)
 
-    dual_encoder = Model(
-        inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv1d_ae.get_layer(index=0).input],
-        outputs=[concat_embedding]
-    )
-    # dual_encoder.summary()
-    plot_model(dual_encoder, to_file=os.path.join(results_path, 'dual_encoder.png'), show_shapes=True)
+        for layer in dual_sae.layers:
+            for attr in ['kernel_regularizer']:
+                if hasattr(layer, attr):
+                    log(f'apply reg for {layer.name}')
+                    setattr(layer, attr, regularizer)
+        # dual_encoder.summary()
+        plot_model(dual_encoder, to_file=os.path.join(results_path, 'dual_encoder.png'), show_shapes=True)
+        dual_sae.compile(loss=['mse', 'kld', 'mse'], loss_weights=[var_alpha, var_beta, var_gamma], optimizer='adam',
+                         metrics={'cls_pedcc': 'accuracy', 'RP_reconstruction': 'mse', 'ts_reconstruction': 'mse'}
+                         )
 
-    if MULTI_GPU:
-        dual_sae = multi_gpu_model(dual_sae, gpus=2)
 
-    regularizer = regularizers.l2(0.001)
-
-    for layer in dual_sae.layers:
-        for attr in ['kernel_regularizer']:
-            if hasattr(layer, attr):
-                log(f'apply reg for {layer.name}')
-                setattr(layer, attr, regularizer)
 
     # optimizer = AdamW(learning_rate=lr_schedule(0), weight_decay=wd_schedule(0))
 
-    dual_sae.compile(loss=['mse', 'kld', 'mse'], loss_weights=[var_alpha, var_beta, var_gamma], optimizer='adam',
-                     metrics={'cls_pedcc': 'accuracy', 'RP_reconstruction': 'mse', 'ts_reconstruction': 'mse'}
-                     )
+
     return dual_sae, dual_encoder
 
 
@@ -181,7 +180,7 @@ def pretrain_ts(epochs=1000, batch_size=200, patience=10):
                       callbacks=[cp, csv_logger, early_stopping])
 
 
-def train_classifier(pretrained=True, epochs=100, batch_size=200):
+def train_classifier(pretrained=True, epochs=100, batch_size=200, patience=30):
     log('train_classifier...')
     cp_path = os.path.join(results_path, 'sae_check_point.model')
     # val_cls_pedcc_accuracy
@@ -349,7 +348,13 @@ if __name__ == '__main__':
     pathlib.Path(os.path.join(results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
     log(f'dataset:{args.dataset}, results_path:{results_path} , loss weight:{alpha},{beta},{gamma},'
         f'RP_emb_dim:{RP_emb_dim}, ts_emb_dim:{ts_emb_dim}, no_pretrain:{no_pretrain}, no_joint_train:{no_pretrain}')
+    strategy = tf.distribute.MirroredStrategy()
 
+    batch_size_per_replica = 256
+
+    batch_size = batch_size_per_replica * strategy.num_replicas_in_sync
+    log('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+    log(f'batch size:{batch_size}')
     data_set = dataset_factory.Dataset(args.dataset)
     x_RP_train = data_set.x_RP_train
     x_RP_test = data_set.x_RP_test
@@ -368,18 +373,12 @@ if __name__ == '__main__':
     # n_ae = 2  # num of ae
     # each_embedding_dim = int(EMB_DIM / n_ae)
 
-    patience = 30
-    epochs = 30
-    batch_size = 350
     if no_joint_train:
         # var_alpha, var_beta, var_gamma = K.variable(0), K.variable(1), K.variable(0)
         var_alpha, var_beta, var_gamma = 0, 1, 0
     else:
         # var_alpha, var_beta, var_gamma = K.variable(alpha), K.variable(beta), K.variable(gamma)
         var_alpha, var_beta, var_gamma = alpha, beta, gamma
-    RP_conv2d_ae = RP_Conv2D_AE()
-    ts_conv1d_ae = ts_Conv1d_AE()
-    dual_sae, dual_encoder = dual_SAE()
     # tb = TensorBoard(log_dir=os.path.join(results_path, 'tensorflow_logs'),
     #                  histogram_freq=0,
     #
@@ -391,18 +390,23 @@ if __name__ == '__main__':
     #                  embeddings_metadata=None)
 
     # means only train classifier using default loss_weight
+    # batch_size = 300
     if no_pretrain or no_joint_train:
-        train_classifier(pretrained=False, epochs=3000, batch_size=batch_size)
+        dual_sae, dual_encoder = dual_SAE()
+        train_classifier(pretrained=False, epochs=3000, batch_size=batch_size, patience=30)
     else:
         t0 = time.time()
+        RP_conv2d_ae = RP_Conv2D_AE()
         pretrain_RP(epoch1, batch_size, patience=5)
         t1 = time.time()
         log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
+        ts_conv1d_ae = ts_Conv1d_AE()
         pretrain_ts(epoch2, batch_size, patience=5)
         t2 = time.time()
         log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
+        dual_sae, dual_encoder = dual_SAE()
         visualize_dual_ae_embedding()
-        train_classifier(pretrained=True, epochs=3000, batch_size=batch_size)
+        train_classifier(pretrained=True, epochs=3000, batch_size=batch_size, patience=30)
         t3 = time.time()
         log('train_classifier Running time: %s Seconds' % (t3 - t1))
 

@@ -12,10 +12,10 @@ for i, label in enumerate(labels):
     # 0,    1,    2,   3,         4           5
     # walk, bike, bus, driving, train/subway, run
     # modes_to_use = [0, 1, 2, 3, 4]
-    if label == 4:
+    if label == 2:
         #                   0  1         2    3  4
         # delta_t, hour, d, v, a, h, hc, hcr, s, tn
-        MFs = train_segs_noise_features[i][:, 2]
+        MFs = train_segs_noise_features[i][:, 3]
         segs_MF.extend(MFs)
 
 segs_MF = np.array(segs_MF)
