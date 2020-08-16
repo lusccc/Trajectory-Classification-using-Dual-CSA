@@ -18,7 +18,7 @@ from sklearn.metrics import confusion_matrix, classification_report
 
 from Geolife_trajectory_extraction import modes_to_use
 from comparison.LSTM_AE import LSTM_AE
-from network.CONV2D_AE import CONV2D_AE
+from network_keras.CONV2D_AE import CONV2D_AE
 from params import TOTAL_EMBEDDING_DIM, MULTI_GPU
 from utils import visualizeData
 

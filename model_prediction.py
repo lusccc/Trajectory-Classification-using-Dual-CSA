@@ -5,7 +5,7 @@ from keras.engine.saving import load_model
 from sklearn.metrics import confusion_matrix, classification_report
 
 from dataset_factory import *
-from network.Dual_SAE import student_t, N_CLASS, modes_to_use
+from network_keras.Dual_CSA import student_t, N_CLASS, modes_to_use
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 

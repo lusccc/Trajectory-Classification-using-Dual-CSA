@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 from geopy.distance import geodesic
-from keras.utils import to_categorical
+from tensorflow.python.keras.utils.np_utils import to_categorical
 
 from params import *
 from utils import segment_single_series, check_lat_lng, calc_initial_compass_bearing, interp_single_series
@@ -368,6 +368,7 @@ if __name__ == '__main__':
     else:
         feature_set = [int(item) for item in args.feature_set.split(',')]
     print(f'feature_set:{feature_set}')
+
     n_cpus = multiprocessing.cpu_count()
     print(f'n_thread:{n_cpus}')
     pool = multiprocessing.Pool(processes=n_cpus)

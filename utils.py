@@ -1,4 +1,5 @@
 import math
+import os
 
 import matplotlib
 import numpy as np
@@ -8,6 +9,7 @@ import matplotlib.pyplot as plt
 from numba import jit
 from scipy.interpolate import interp1d
 from sklearn import manifold
+import tables as tb
 
 from params import SCALER, MAX_SEGMENT_SIZE, MIN_N_POINTS
 import time
@@ -187,3 +189,16 @@ def datatime_to_timestamp(dt):
 
 def timestamp_to_hour(ts):
     return datetime.fromtimestamp(ts).hour
+
+def synchronized_open_file(lock, *args, **kwargs):
+    with lock:
+        print(f'pid:{os.getpid()} open')
+        return tb.open_file(*args, **kwargs)
+
+
+def synchronized_close_file(lock, self, *args, **kwargs):
+    with lock:
+        print(f'pid:{os.getpid()} close')
+        return self.close(*args, **kwargs)
+
+tb_filters = tb.Filters(complevel=5, complib='blosc')

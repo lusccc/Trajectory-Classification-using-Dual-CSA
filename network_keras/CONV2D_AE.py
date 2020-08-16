@@ -7,6 +7,9 @@ from tensorflow.python.keras.utils.vis_utils import plot_model
 
 
 def CONV2D_AE(input_shape, embedding_dim, n_features, name, results_path, zero_padding=0):
+    '''
+    multi channel RP mats (2D-images) CONV2D autoencoder
+    '''
     size = input_shape[1]  # mat size
     # print('input_shape:', input_shape)
     activ = 'relu'

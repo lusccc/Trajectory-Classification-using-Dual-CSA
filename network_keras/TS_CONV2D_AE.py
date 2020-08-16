@@ -5,9 +5,9 @@ from tensorflow.python.keras.layers import Conv2D, ZeroPadding2D, Activation, Ma
     Reshape, UpSampling2D, Conv2DTranspose, Cropping2D
 from tensorflow.python.keras.utils.vis_utils import plot_model
 
-def TS_CONV1D_AE(input_shape, embedding_dim, n_features, name, results_path, zero_padding=0):
+def CONV1D_AE(input_shape, embedding_dim, n_features, name, results_path, zero_padding=0):
     """
-    time series conv ae
+    multi features segs CONV1D autoencoder
     """
     size = input_shape[1]  # series size
     # print('input_shape:', input_shape)

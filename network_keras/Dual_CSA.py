@@ -1,4 +1,5 @@
 import argparse
+import math
 import os
 import pathlib
 import time
@@ -16,9 +17,10 @@ from tensorflow.python.keras.layers import concatenate, Lambda
 from tensorflow.python.keras.saving.save import load_model
 from tensorflow.python.keras.utils.vis_utils import plot_model
 
+import data_sequence
 import dataset_factory
-from network.CONV2D_AE import CONV2D_AE
-from network.TS_CONV2D_AE import TS_CONV1D_AE
+from network_keras.CONV2D_AE import CONV2D_AE
+from network_keras.TS_CONV2D_AE import CONV1D_AE
 from params import *
 from utils import visualizeData
 
@@ -26,12 +28,11 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
 # make run on low memory machine
-# config = tf.compat.v1.ConfigProto()
-# config.gpu_options.allow_growth = True
-# config.log_device_placement = True
-# session = tf.compat.v1.Session(config=config)
-# tf.compat.v1.keras.backend.set_session(session)
-
+config = tf.compat.v1.ConfigProto()
+config.gpu_options.allow_growth = True
+config.log_device_placement = True
+session = tf.compat.v1.Session(config=config)
+tf.compat.v1.keras.backend.set_session(session)
 
 
 def log(info):
@@ -40,7 +41,6 @@ def log(info):
         print(info)
         print('★ ', end='', file=f)
         print(info, file=f)
-
 
 
 def student_t(z, u, alpha=1.):
@@ -66,14 +66,13 @@ classification_layer = Lambda(lambda x: student_t(x[0], x[1]), output_shape=lamb
 
 def RP_Conv2D_AE():
     """ -----RP_conv_ae------"""
-    RP_mat_size = x_RP_train.shape[1]  # 40
-    n_features = x_RP_train.shape[3]
-    # our network will maxpooling 3 times with size 2, i.e., 8 times smaller.
-    # here we check if the size fit to the network, or we apply zero padding
+    RP_mat_size = data_set.multi_channel_RP_mat_test.shape[1]  # 40
+    n_features = data_set.multi_channel_RP_mat_test.shape[3]
+    # our network_keras will maxpooling 3 times with size 2, i.e., 8 times smaller.
+    # here we check if the size fit to the network_keras, or we apply zero padding
     zero_padding = 0
     if RP_mat_size % 8 != 0:
-        zero_padding = int((int(
-            RP_mat_size / 8) * 8 + 8 - RP_mat_size) / 2)  # divided by 2, because pad to width and height at same time
+        zero_padding = int((int(RP_mat_size / 8) * 8 + 8 - RP_mat_size) / 2)  # divided by 2, because pad to width and height at same time
 
     with strategy.scope():
         RP_conv_ae = CONV2D_AE((RP_mat_size, RP_mat_size, n_features), RP_emb_dim, n_features, 'RP', results_path,
@@ -83,24 +82,23 @@ def RP_Conv2D_AE():
 
 
 def ts_Conv1d_AE():
-    n_features = x_features_series_train.shape[3]
-    seg_size = x_features_series_train.shape[2]
-    # our network will maxpooling 3 times with size 2, i.e., 8 times smaller.
-    # here we check if the size fit to the network, or we apply zero padding
+    n_features = data_set.multi_feature_segment_test.shape[3]
+    seg_size = data_set.multi_feature_segment_test.shape[2]
+    # our network_keras will maxpooling 3 times with size 2, i.e., 8 times smaller.
+    # here we check if the size fit to the network_keras, or we apply zero padding
     zero_padding = 0
     if seg_size % 8 != 0:
         zero_padding = int((int(
             seg_size / 8) * 8 + 8 - seg_size) / 2)  # divided by 2, because pad to width and height at same time
 
-
     with strategy.scope():
-        ts_conv_ae = TS_CONV1D_AE((1, seg_size, n_features), ts_emb_dim, n_features, 'ts', results_path,
-                                  zero_padding)
+        ts_conv_ae = CONV1D_AE((1, seg_size, n_features), ts_emb_dim, n_features, 'ts', results_path,
+                               zero_padding)
         ts_conv_ae.compile(optimizer='adam', loss='mse', metrics={'ts_reconstruction': 'mse'})
     return ts_conv_ae
 
 
-def dual_SAE():
+def dual_CSA():
     """--------SAE----------"""
     concat_embedding = concatenate([RP_conv2d_ae.get_layer('RP_embedding').output,
                                     ts_conv1d_ae.get_layer('ts_embedding').output])
@@ -108,12 +106,12 @@ def dual_SAE():
     classification = classification_layer([concat_embedding, centroids_input])
     # dense_out = Dense(input_dim=N_CLASS, units=N_CLASS, name='dense_out')(classification)
     with strategy.scope():
-        dual_sae = Model(
+        dual_csa = Model(
             inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv1d_ae.get_layer(index=0).input],
             outputs=[RP_conv2d_ae.get_layer('RP_reconstruction').output, classification,
                      ts_conv1d_ae.get_layer('ts_reconstruction').output])
-        dual_sae.summary()
-        plot_model(dual_sae, to_file=os.path.join(results_path, 'dual_sae.png'), show_shapes=True)
+        dual_csa.summary()
+        plot_model(dual_csa, to_file=os.path.join(results_path, 'dual_csa.png'), show_shapes=True)
 
         dual_encoder = Model(
             inputs=[RP_conv2d_ae.get_layer(index=0).input, centroids_input, ts_conv1d_ae.get_layer(index=0).input],
@@ -121,23 +119,20 @@ def dual_SAE():
         )
         regularizer = regularizers.l2(0.001)
 
-        for layer in dual_sae.layers:
+        for layer in dual_csa.layers:
             for attr in ['kernel_regularizer']:
                 if hasattr(layer, attr):
                     log(f'apply reg for {layer.name}')
                     setattr(layer, attr, regularizer)
         # dual_encoder.summary()
         plot_model(dual_encoder, to_file=os.path.join(results_path, 'dual_encoder.png'), show_shapes=True)
-        dual_sae.compile(loss=['mse', 'kld', 'mse'], loss_weights=[var_alpha, var_beta, var_gamma], optimizer='adam',
+        dual_csa.compile(loss=['mse', 'kld', 'mse'], loss_weights=[var_alpha, var_beta, var_gamma], optimizer='adam',
                          metrics={'cls_pedcc': 'accuracy', 'RP_reconstruction': 'mse', 'ts_reconstruction': 'mse'}
                          )
 
-
-
     # optimizer = AdamW(learning_rate=lr_schedule(0), weight_decay=wd_schedule(0))
 
-
-    return dual_sae, dual_encoder
+    return dual_csa, dual_encoder
 
 
 """-----------train---------------"""
@@ -156,9 +151,15 @@ def pretrain_RP(epochs=1000, batch_size=200, patience=10):
 
     RP_conv_ae_ = RP_conv2d_ae
     if exists(cp_path):
-        RP_conv_ae_ = load_model(cp_path)
-    RP_conv_ae_.fit(x_RP_train, x_RP_train, batch_size=batch_size, epochs=epochs,
-                    callbacks=[cp, csv_logger, early_stopping])
+        with strategy.scope():
+            RP_conv_ae_ = load_model(cp_path)
+
+    for i in range(n_trainset_split_parts):
+        log(f'train RP on trainset part:{i}')
+        RP_train_part = data_set.get_RP_train_part(i)
+        RP_conv_ae_.fit(x=RP_train_part, y=RP_train_part, batch_size=batch_size, epochs=epochs,
+                        use_multiprocessing=False,
+                        shuffle=True, callbacks=[cp, csv_logger, early_stopping])
 
 
 def pretrain_ts(epochs=1000, batch_size=200, patience=10):
@@ -174,10 +175,14 @@ def pretrain_ts(epochs=1000, batch_size=200, patience=10):
 
     ts_conv1d_ae_ = ts_conv1d_ae
     if exists(cp_path):
-        ts_conv1d_ae_ = load_model(cp_path)
-    ts_conv1d_ae_.fit(x_features_series_train, x_features_series_train, batch_size=batch_size,
-                      epochs=epochs,
-                      callbacks=[cp, csv_logger, early_stopping])
+        with strategy.scope():
+            ts_conv1d_ae_ = load_model(cp_path)
+    for i in range(n_trainset_split_parts):
+        log(f'train ts on trainset part:{i}')
+        ts_train_part = data_set.get_multi_feature_seg_train_part(n_trainset_split_part_size, i)
+        ts_conv1d_ae_.fit(x=ts_train_part, y=ts_train_part, batch_size=batch_size, epochs=epochs,
+                          use_multiprocessing=False,
+                          shuffle=True, callbacks=[cp, csv_logger, early_stopping])
 
 
 def train_classifier(pretrained=True, epochs=100, batch_size=200, patience=30):
@@ -191,26 +196,38 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200, patience=30):
     # reduce_lr = ReduceLROnPlateau(monitor='loss', patience=100, mode='auto',
     #                               factor=factor, cooldown=0, min_lr=1e-4, verbose=2)
     visulazation_callback = SAE_embedding_visualization_callback(os.path.join(results_path, 'sae_cp_{epoch}.h5'))
-    if pretrained:
-        log('loading trained dual ae...')
-        load_model(os.path.join(results_path, 'RP_conv_ae_check_point.model'))
-        load_model(os.path.join(results_path, 'ts_conv_ae_check_point.model'))
+    # if pretrained:
+    #     with strategy.scope():
+    #         log('loading trained dual ae...')
+    #         load_model(os.path.join(results_path, 'RP_conv_ae_check_point.model'))
+    #         load_model(os.path.join(results_path, 'ts_conv_ae_check_point.model'))
     if exists(cp_path):
-        load_model(cp_path)
+        with strategy.scope():
+            log('load sae_check_point.model')
+            load_model(cp_path)
     csv_logger = CSVLogger(os.path.join(results_path, 'csa_log.csv'), append=True, separator=';')
-    hist = dual_sae.fit([x_RP_train, x_centroids_train, x_features_series_train],
-                        [x_RP_train, y_train, x_features_series_train],
-                        epochs=epochs,
-                        batch_size=batch_size, shuffle=True,
-                        validation_data=(
-                            [x_RP_test, x_centroids_test, x_features_series_test],
-                            [x_RP_test, y_test, x_features_series_test]),
-                        callbacks=[early_stopping, csv_logger,
-                                   # Dynamic_loss_weights_callback(var_alpha, var_beta, var_gamma),
-                                   # visulazation_callback,
-                                   cp
-                                   ],
-                        )
+
+    for i in range(n_trainset_split_parts):
+        log(f'train classifier on train set part:{i}')
+        RP_train_part = data_set.get_RP_train_part(i)
+        centroid_train_part = data_set.get_centroid_train_part(n_trainset_split_part_size, i)
+        ts_train_part = data_set.get_multi_feature_seg_train_part(n_trainset_split_part_size, i)
+        label_train_part = data_set.get_label_train_part(n_trainset_split_part_size, i)
+        hist = dual_csa.fit(
+            x=[RP_train_part, centroid_train_part, ts_train_part],
+            y=[RP_train_part, label_train_part, ts_train_part],
+            epochs=epochs,
+            batch_size=batch_size, shuffle=True,
+            validation_data=(
+            [data_set.multi_channel_RP_mat_test, data_set.centroid_test, data_set.multi_feature_segment_test],
+            [data_set.multi_channel_RP_mat_test, data_set.label_test, data_set.multi_feature_segment_test]),
+            callbacks=[early_stopping, csv_logger,
+                       # Dynamic_loss_weights_callback(var_alpha, var_beta, var_gamma),
+                       # visulazation_callback,
+                       cp
+                       ],
+            use_multiprocessing=False
+        )
     #
     score = np.argmax(hist.history['val_cls_pedcc_accuracy'])
     log('the optimal epoch size: {}, the value of high accuracy {}'.format(hist.epoch[score],
@@ -267,8 +284,8 @@ class SAE_embedding_visualization_callback(ModelCheckpoint):
 
     def on_epoch_end(self, epoch, logs=None):
         if epoch % 4 == 0:
-            embedding = dual_encoder.predict([x_RP_test, x_centroids_test, x_features_series_test])
-            y_true = np.argmax(y_test, axis=1)
+            embedding = dual_encoder.predict([data_set.multi_channel_RP_mat_test, data_set.centroid_test, data_set.multi_feature_segment_test])
+            y_true = np.argmax(data_set.label_test, axis=1)
             visualizeData(embedding, y_true, N_CLASS,
                           os.path.join(results_path, 'visualization', 'sae_embedding_epoch{}.png'.format(epoch)))
 
@@ -276,9 +293,9 @@ class SAE_embedding_visualization_callback(ModelCheckpoint):
 def show_confusion_matrix():
     sae = load_model(os.path.join(results_path, 'sae_check_point.model'),
                      custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
-    pred = sae.predict([x_RP_test, x_centroids_test, x_features_series_test])
+    pred = sae.predict([data_set.multi_channel_RP_mat_test, data_set.centroid_test, data_set.multi_feature_segment_test])
     y_pred = np.argmax(pred[1], axis=1)
-    y_true = np.argmax(y_test, axis=1)
+    y_true = np.argmax(data_set.label_test, axis=1)
     cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)
     log(cm)
     with open(os.path.join(results_path, 'confusion_matrix.txt'), 'w') as f:
@@ -300,21 +317,21 @@ def show_confusion_matrix():
 def visualize_sae_embedding():
     sae = load_model(os.path.join(results_path, 'sae_check_point.model'),
                      custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
-    embedding = dual_encoder.predict([x_RP_test, x_centroids_test, x_features_series_test])
-    y_true = np.argmax(y_test, axis=1)
+    embedding = dual_encoder.predict([data_set.multi_channel_RP_mat_test, data_set.centroid_test, data_set.multi_feature_segment_test])
+    y_true = np.argmax(data_set.label_test, axis=1)
     visualizeData(embedding, y_true, N_CLASS, os.path.join(results_path, 'visualization', 'best.png'))
 
 
 def visualize_dual_ae_embedding():
     load_model(os.path.join(results_path, 'RP_conv_ae_check_point.model'))
     load_model(os.path.join(results_path, 'ts_conv_ae_check_point.model'))
-    embedding = dual_encoder.predict([x_RP_test, x_centroids_test, x_features_series_test])
-    y_true = np.argmax(y_test, axis=1)
+    embedding = dual_encoder.predict([data_set.multi_channel_RP_mat_test, data_set.centroid_test, data_set.multi_feature_segment_test])
+    y_true = np.argmax(data_set.label_test, axis=1)
     visualizeData(embedding, y_true, N_CLASS, os.path.join(results_path, 'visualization', 'dual_ae_embedding.png'))
 
 
 def visualize_centroids():
-    visualizeData(x_centroids_test[0], modes_to_use, N_CLASS,
+    visualizeData(data_set.centroid_test[0], modes_to_use, N_CLASS,
                   os.path.join(results_path, 'visualization', 'centroids_visualization.png'))
 
 
@@ -331,6 +348,7 @@ if __name__ == '__main__':
     parser.add_argument('--epoch2', default=3000, type=int)
     parser.add_argument('--RP_emb_dim', type=int)
     parser.add_argument('--ts_emb_dim', type=int)
+    parser.add_argument('--n_trainset_split_parts', type=int, default=1)
 
     args = parser.parse_args()
     results_path = args.results_path
@@ -344,26 +362,26 @@ if __name__ == '__main__':
     RP_emb_dim = args.RP_emb_dim
     ts_emb_dim = args.ts_emb_dim
     TOTAL_EMB_DIM = RP_emb_dim + ts_emb_dim
+    dataset = args.dataset
+    n_trainset_split_parts = args.n_trainset_split_parts
 
     pathlib.Path(os.path.join(results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
-    log(f'dataset:{args.dataset}, results_path:{results_path} , loss weight:{alpha},{beta},{gamma},'
-        f'RP_emb_dim:{RP_emb_dim}, ts_emb_dim:{ts_emb_dim}, no_pretrain:{no_pretrain}, no_joint_train:{no_pretrain}')
+
+    log(f'dataset:{dataset}, results_path:{results_path} , loss weight:{alpha},{beta},{gamma},'
+        f'RP_emb_dim:{RP_emb_dim}, ts_emb_dim:{ts_emb_dim}, no_pretrain:{no_pretrain}, no_joint_train:{no_pretrain}, '
+        f'n_trainset_split_parts:{n_trainset_split_parts}')
+
     strategy = tf.distribute.MirroredStrategy()
 
-    batch_size_per_replica = 256
-
+    batch_size_per_replica = 1
     batch_size = batch_size_per_replica * strategy.num_replicas_in_sync
     log('Number of devices: {}'.format(strategy.num_replicas_in_sync))
     log(f'batch size:{batch_size}')
-    data_set = dataset_factory.Dataset(args.dataset)
-    x_RP_train = data_set.x_RP_train
-    x_RP_test = data_set.x_RP_test
-    x_features_series_train = data_set.x_features_series_train
-    x_features_series_test = data_set.x_features_series_test
-    x_centroids_train = data_set.x_centroids_train
-    x_centroids_test = data_set.x_centroids_test
-    y_train = data_set.y_train
-    y_test = data_set.y_test
+
+    data_set = dataset_factory.Dataset(dataset, n_trainset_split_parts)
+    n_train_samples = data_set.n_samples_train
+    n_test_samples = data_set.n_samples_test
+    n_trainset_split_part_size = math.ceil(n_train_samples / n_trainset_split_parts)
 
     # """ note: each autoencoder has same embedding,
     #  embedding will be concated to match EMB_DIM,
@@ -392,20 +410,20 @@ if __name__ == '__main__':
     # means only train classifier using default loss_weight
     # batch_size = 300
     if no_pretrain or no_joint_train:
-        dual_sae, dual_encoder = dual_SAE()
+        dual_csa, dual_encoder = dual_CSA()
         train_classifier(pretrained=False, epochs=3000, batch_size=batch_size, patience=30)
     else:
         t0 = time.time()
         RP_conv2d_ae = RP_Conv2D_AE()
-        pretrain_RP(epoch1, batch_size, patience=5)
+        # pretrain_RP(epoch1, batch_size, patience=5)
         t1 = time.time()
         log('pretrain_RP Running time: %s Seconds' % (t1 - t0))
         ts_conv1d_ae = ts_Conv1d_AE()
-        pretrain_ts(epoch2, batch_size, patience=5)
+        # pretrain_ts(epoch2, batch_size, patience=5)
         t2 = time.time()
         log('pretrain_ts Running time: %s Seconds' % (t2 - t1))
-        dual_sae, dual_encoder = dual_SAE()
-        visualize_dual_ae_embedding()
+        dual_csa, dual_encoder = dual_CSA()
+        # visualize_dual_ae_embedding()
         train_classifier(pretrained=True, epochs=3000, batch_size=batch_size, patience=30)
         t3 = time.time()
         log('train_classifier Running time: %s Seconds' % (t3 - t1))

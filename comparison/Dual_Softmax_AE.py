@@ -15,8 +15,8 @@ from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
 
 from Geolife_trajectory_extraction import modes_to_use
-from network.CONV2D_AE import CONV2D_AE
-from network.TS_CONV2D_AE import TS_CONV1D_AE
+from network_keras.CONV2D_AE import CONV2D_AE
+from network_keras.TS_CONV2D_AE import CONV1D_AE
 from params import MULTI_GPU
 
 
@@ -54,7 +54,7 @@ def RP_Conv2D_AE():
 
 def ts_Conv2d_AE():
     n_features = x_features_series_train.shape[3]
-    ts_conv1d_ae = TS_CONV1D_AE((1, MAX_SEGMENT_SIZE, n_features), each_embedding_dim, n_features, 'ts')
+    ts_conv1d_ae = CONV1D_AE((1, MAX_SEGMENT_SIZE, n_features), each_embedding_dim, n_features, 'ts')
     if MULTI_GPU:
         ts_conv1d_ae = multi_gpu_model(ts_conv1d_ae, gpus=2)
     ts_conv1d_ae.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
@@ -180,14 +180,14 @@ if __name__ == '__main__':
                                                                                            no_pretrain, no_joint_train))
     pathlib.Path(os.path.join(results_path, 'visualization&analysis')).mkdir(parents=True, exist_ok=True)
 
-    x_RP_train = Dataset.x_RP_train
-    x_RP_test = Dataset.x_RP_test
-    x_features_series_train = Dataset.x_features_series_train
-    x_features_series_test = Dataset.x_features_series_test
-    x_centroids_train = Dataset.x_centroids_train
-    x_centroids_test = Dataset.x_centroids_test
-    y_train = Dataset.y_train
-    y_test = Dataset.y_test
+    x_RP_train = Dataset.multi_channel_RP_train
+    x_RP_test = Dataset.multi_channel_RP_test
+    x_features_series_train = Dataset.multi_feature_segment_train
+    x_features_series_test = Dataset.multi_feature_segment_test
+    x_centroids_train = Dataset.centroid_train
+    x_centroids_test = Dataset.centroid_test
+    y_train = Dataset.label_train
+    y_test = Dataset.label_test
 
     EMB_DIM = x_centroids_train.shape[2]
 

@@ -1,5 +1,4 @@
 import argparse
-import math
 import multiprocessing
 import sys
 import threading
@@ -12,8 +11,8 @@ from numpy.lib.stride_tricks import as_strided
 from numpy.linalg import norm
 from pyts.image.recurrence import _trajectories
 
-import utils
 from params import DIM, TAU, FEATURES_SET_1
+from utils import scale_any_shape_data, scale_RP_each_feature, synchronized_open_file, synchronized_close_file
 
 #  Settings for the embedding
 
@@ -82,7 +81,7 @@ def __gen_multiple_RP_mats(multi_series, scale=False, dim=DIM, tau=TAU):
     else:
         RP_mats = distance_mats  # !!skipped Heavside function
     if scale:
-        RP_mats = utils.scale_any_shape_data(RP_mats)
+        RP_mats = scale_any_shape_data(RP_mats)
     return RP_mats
 
 
@@ -100,6 +99,9 @@ def sign(m, n):
         return 1
 
 
+
+
+
 def gen_single_RP_mat(singel_series, dimension=DIM, time_delay=TAU):
     # The strides of an array tell us how many bytes we have to skip in memory to move to the next position along a certain axis.
     n_timestamps = len(singel_series)
@@ -114,25 +116,24 @@ def gen_single_RP_mat(singel_series, dimension=DIM, time_delay=TAU):
     return distance_mat
 
 
-def generate_RP_mats(trjs_segs_features, dim, tau, n_features, save_path):
+def generate_RP_mats(trjs_segs_features, dim, tau, n_features, save_path, h5node_name):
     print('gen_RP_mats...')
     tasks = []
     batch_size = int(len(trjs_segs_features) / n_cpus + 1)
     for i in range(0, n_cpus):
         tasks.append(pool.apply_async(do_generate_RP_mats,
-                                      (trjs_segs_features[i * batch_size:(i + 1) * batch_size], dim, tau, n_features,
+                                      (trjs_segs_features[i * batch_size:(i + 1) * batch_size], dim, tau, n_features, save_path,
+                                       h5node_name
                                        )))
     res = [t.get() for t in tasks]
-    RP_mats = np.concatenate(res)
-    RP_mats = utils.scale_RP_each_feature(RP_mats)
-    print(f'save to {save_path}')
-    np.save(save_path, RP_mats)
 
-def do_generate_RP_mats(multi_features_segs, dim, tau, n_features):
+
+def do_generate_RP_mats(multi_features_segs, dim, tau, n_features, save_path, h5node_name):
     '''
     :param multi_features_segs: (n, seg_size, n_features)
     '''
-    RP_mats = []
+    RP_mats_h5file = synchronized_open_file(lock, save_path, mode='a')
+    RP_mats_h5array = RP_mats_h5file.get_node('/' + h5node_name)
     for multi_features_seg in multi_features_segs:
         multi_channels_RP_mat = []
         for i in range(n_features):
@@ -143,17 +144,16 @@ def do_generate_RP_mats(multi_features_segs, dim, tau, n_features):
             multi_channels_RP_mat.append(RP_mat)
         multi_channels_RP_mat = np.stack(multi_channels_RP_mat, axis=2)  # (n_vec, n_vec, n_feature, 1)
         multi_channels_RP_mat = np.squeeze(multi_channels_RP_mat)  # (n_vec, n_vec, n_feature)
-        # multi_channels_RP_mat = np.expand_dims(multi_channels_RP_mat, axis=0)  # (1, n_vec, n_vec, n_feature)
-        RP_mats.append(multi_channels_RP_mat)
-    RP_mats = np.array(RP_mats)
-    print(RP_mats.shape)
+        multi_channels_RP_mat = np.expand_dims(multi_channels_RP_mat, axis=0) # (1, n_vec, n_vec, n_feature)
+        RP_mats_h5array.append(multi_channels_RP_mat)
+    print(RP_mats_h5array.shape)
+    synchronized_close_file(lock, RP_mats_h5file)
     print('*end a thread')
-    return RP_mats
 
 if __name__ == '__main__':
     n_cpus = multiprocessing.cpu_count()
     print(f'n_thread:{n_cpus}')
-    pool = multiprocessing.Pool(processes=n_cpus)
+    pool = multiprocessing.Pool(processes=1) # pytables multi-thread support TODO
     start = time.time()
     parser = argparse.ArgumentParser(description='RP_mat')
     parser.add_argument('--dim', default=DIM, type=int)
@@ -161,13 +161,11 @@ if __name__ == '__main__':
     parser.add_argument('--feature_set', type=str)
     parser.add_argument('--trjs_segs_features_path', type=str)
     parser.add_argument('--save_path', type=str)
-    parser.add_argument('--n_parts', type=int, default=1)  # divide data into n parts to save final RP mats.
 
     args = parser.parse_args()
     dim = args.dim
     tau = args.tau
     save_path = args.save_path
-    n_parts = args.n_parts
     print('dim:{} tau:{}'.format(dim, tau))
     if args.feature_set is None:
         feature_set = FEATURES_SET_1
@@ -183,14 +181,19 @@ if __name__ == '__main__':
     trjs_segs_features = np.squeeze(trjs_segs_features)
 
     n_vectors = n_timestamps - (dim - 1) * tau
-
-    part_size = math.ceil(n_samples / n_parts)
-    print(f'n_samples:{n_samples}, n_parts:{n_parts}, part_size:{part_size}')
-    for i in range(n_parts):
-        full_save_path = save_path if n_parts == 1 else save_path+f"_p{i}"
-        generate_RP_mats(trjs_segs_features[i * part_size: (i + 1) * part_size], dim, tau, n_features, full_save_path,
-                         )
-
+    with tb.open_file(args.save_path, mode='w') as RP_mats_h5:
+        RP_mats_h5array = RP_mats_h5.create_earray(
+            '/',
+            DATA_NAME,  # 数据名称，之后需要通过它来访问数据
+            tb.Float32Atom(),  # 设定数据格式（和data1格式相同）
+            shape=(0, n_vectors, n_vectors, n_features),  # 第一维的 0 表示数据可沿行扩展
+            # filters=tb.Filters(complevel=5, complib='blosc'),
+            expectedrows=n_samples
+        )
+    generate_RP_mats(trjs_segs_features, dim, tau, n_features, save_path, DATA_NAME)
+    RP_mats_h5file = synchronized_open_file(lock, save_path, mode='r')
+    RP_mats_h5array = RP_mats_h5file.get_node('/' + DATA_NAME)
+    print(RP_mats_h5array.shape)
     # for i in range(n_features):
     #     single_feature_segs = trjs_segs_features[:, :, i]  # (n, seg_size)
     #     a1 = gen_single_RP_mat(single_feature_segs[0], dim, tau)
