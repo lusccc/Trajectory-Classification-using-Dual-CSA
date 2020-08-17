@@ -51,8 +51,12 @@ def student_t(z, u, alpha=1.):
     :param alpha:
     :return:student's t-distribution, or soft labels for each sample. shape=(n_samples, n_class)
     """
+    tmp1= K.expand_dims(z, axis=1)
+    tmp2=K.square(tmp1 - u)
+    tmp3=K.sum(tmp2, axis=2)
     q = 1.0 / (1.0 + (K.sum(K.square(K.expand_dims(z, axis=1) - u), axis=2) / alpha))
     q **= (alpha + 1.0) / 2.0
+    tmp4 = K.transpose(q)
     q = K.transpose(K.transpose(q) / K.sum(q, axis=1))
     return q
 

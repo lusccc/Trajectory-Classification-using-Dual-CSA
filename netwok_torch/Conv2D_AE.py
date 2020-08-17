@@ -1,12 +1,9 @@
-from collections import OrderedDict
 
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchsummary import summary
 
 
-# define the NN architecture
 class Conv2D_AE(nn.Module):
     # refer to https://github.com/rasbt/deeplearning-models/blob/master/pytorch_ipynb/autoencoder/ae-deconv.ipynb
     def __init__(self, n_ori_channels, emb_dim):
@@ -16,7 +13,7 @@ class Conv2D_AE(nn.Module):
         # => p = (s(o-1) - w + k)/2
 
         ### ENCODER
-        # 184x184xin_channels => 184x184x32
+        # 184x184xn_ori_channels => 184x184x32
         self.conv_1 = nn.Conv2d(in_channels=n_ori_channels,
                                 out_channels=32,
                                 kernel_size=(3, 3),
@@ -89,13 +86,13 @@ class Conv2D_AE(nn.Module):
         ### ENCODER
         x = self.conv_1(x)
         x = F.leaky_relu(x)
-        x, pooled1_indices = self.pool_1(x)
+        x, pool_1_indices = self.pool_1(x)
         x = self.conv_2(x)
         x = F.leaky_relu(x)
-        x, pooled2_indices = self.pool_2(x)
+        x, pool_2_indices = self.pool_2(x)
         x = self.conv_3(x)
         x = F.leaky_relu(x)
-        x, pooled3_indices = self.pool_3(x)
+        x, pool_3_indices = self.pool_3(x)
 
         x = self.flatten(x)
         emb = self.embedding(x)
@@ -103,19 +100,21 @@ class Conv2D_AE(nn.Module):
         # ### DECODER
         x = self.recon_flatten(emb)
         x = x.view(-1, 128, 23, 23) # reshape
-        x = self.unpool_1(x, indices=pooled3_indices) # indices: max val index in feature map passed through
+        x = self.unpool_1(x, indices=pool_3_indices) # indices: max val index in feature map passed through
         x = self.deconv_1(x)
         x = F.leaky_relu(x)
-        x = self.unpool_2(x, indices=pooled2_indices)
+        x = self.unpool_2(x, indices=pool_2_indices)
         x = self.deconv_2(x)
         x = F.leaky_relu(x)
-        x = self.unpool_3(x, indices=pooled1_indices)
+        x = self.unpool_3(x, indices=pool_1_indices)
         x = self.deconv_3(x)
         x = F.leaky_relu(x)
         return x, emb
 
 
-# initialize the NN
-model = Conv2D_AE(1, 152)
-print(model)
-summary(model, (1, 184, 184))
+
+
+if __name__ == '__main__':
+    model = Conv2D_AE(5, 152)
+    print(model)
+    summary(model, (5, 184, 184))
