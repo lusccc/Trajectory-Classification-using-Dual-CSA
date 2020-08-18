@@ -4,7 +4,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
-from Geolife_trajectory_extraction import modes_to_use
+from trajectory_extraction_geolife import modes_to_use
 from params import FEATURES_SET_1
 
 x_features_series_train = np.load('./data/geolife_features/trjs_segs_features_all_features_train.npy', )

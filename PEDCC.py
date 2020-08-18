@@ -88,20 +88,20 @@ if __name__ == '__main__':
     pedcc = PEDDC(dim)
     # load single pedcc for generate train or test set, because each generating of pedcc is random, we should keep
     # train and test have same pedcc
-    if not os.path.exists(f'{save_dir}/single_pedcc.npy'):
+    if not os.path.exists(f'{save_dir}/pedcc.npy'):
         c = pedcc.generate_center()
         print('saving single pedcc')
-        np.save(f'{save_dir}/single_pedcc.npy', c)
+        np.save(f'{save_dir}/pedcc.npy', c)
     else:
-        c = np.load(f'{save_dir}/single_pedcc.npy')
+        c = np.load(f'{save_dir}/pedcc.npy')
         if dim != c.shape[1]:
             c = pedcc.generate_center()  # generate for new dim
             print('saving single pedcc')
-            np.save(f'{save_dir}/single_pedcc.npy', c)
+            np.save(f'{save_dir}/pedcc.npy', c)
 
-    features = np.load(features_path)
-    n = features.shape[0]
-    # !!those data are generated, no real trajectory data involved!!
-    centroids = pedcc.repeat(c, n, scale)
-    print('saving repeated pedcc')
-    np.save(f'{save_dir}/centroids_{data_type}.npy', centroids)
+    # features = np.load(features_path)
+    # n = features.shape[0]
+    # # !!those data are generated, no real trajectory data involved!!
+    # centroids = pedcc.repeat(c, n, scale)
+    # print('saving repeated pedcc')
+    # np.save(f'{save_dir}/centroids_{data_type}.npy', centroids)

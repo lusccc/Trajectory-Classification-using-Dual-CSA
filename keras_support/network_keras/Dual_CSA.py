@@ -5,7 +5,6 @@ import pathlib
 import time
 from os.path import exists
 
-from tensorflow import keras
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import backend as K
@@ -17,10 +16,9 @@ from tensorflow.python.keras.layers import concatenate, Lambda
 from tensorflow.python.keras.saving.save import load_model
 from tensorflow.python.keras.utils.vis_utils import plot_model
 
-import data_sequence
 import dataset_factory
-from network_keras.CONV2D_AE import CONV2D_AE
-from network_keras.TS_CONV2D_AE import CONV1D_AE
+from keras_support.network_keras import CONV2D_AE
+from keras_support.network_keras.TS_CONV2D_AE import CONV1D_AE
 from params import *
 from utils import visualizeData
 

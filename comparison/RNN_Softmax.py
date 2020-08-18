@@ -7,7 +7,7 @@ from keras.optimizers import Adam
 from keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, classification_report
 
-from Geolife_trajectory_extraction import modes_to_use
+from trajectory_extraction_geolife import modes_to_use
 from params import MAX_SEGMENT_SIZE, FEATURES_SET_1
 
 

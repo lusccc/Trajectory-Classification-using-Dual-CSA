@@ -10,7 +10,7 @@ from keras.optimizers import Adam
 from keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, classification_report
 
-from Geolife_trajectory_extraction import modes_to_use
+from trajectory_extraction_geolife import modes_to_use
 from params import FEATURES_SET_1, MAX_SEGMENT_SIZE
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"

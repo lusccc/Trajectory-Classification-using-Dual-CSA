@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-dataset = 'SHL'
+dataset = 'Trajectory_Feature_Dataset'
 # dataset = 'geolife'
 train_segs_noise_features = np.load(f'../data/{dataset}_features/trjs_segs_features_train_noscale.npy')
 labels = np.load(f'../data/{dataset}_features/trjs_segs_features_labels_train.npy')

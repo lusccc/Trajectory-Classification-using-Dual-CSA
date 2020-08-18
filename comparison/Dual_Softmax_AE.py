@@ -14,9 +14,9 @@ from keras.models import Model
 from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
 
-from Geolife_trajectory_extraction import modes_to_use
-from network_keras.CONV2D_AE import CONV2D_AE
-from network_keras.TS_CONV2D_AE import CONV1D_AE
+from trajectory_extraction_geolife import modes_to_use
+from keras_support.network_keras import CONV2D_AE
+from keras_support.network_keras.TS_CONV2D_AE import CONV1D_AE
 from params import MULTI_GPU
 
 
@@ -178,7 +178,7 @@ if __name__ == '__main__':
     log('results_path:{} , loss weight:{},{},{}, no_pretrain:{}, no_joint_train:{}'.format(results_path, alpha, beta,
                                                                                            gamma,
                                                                                            no_pretrain, no_joint_train))
-    pathlib.Path(os.path.join(results_path, 'visualization&analysis')).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(os.path.join(results_path, 'visualization_and_analysis')).mkdir(parents=True, exist_ok=True)
 
     x_RP_train = Dataset.multi_channel_RP_train
     x_RP_test = Dataset.multi_channel_RP_test

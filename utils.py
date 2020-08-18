@@ -138,7 +138,7 @@ def calc_initial_compass_bearing(pointA, pointB):
     return compass_bearing
 
 
-def interp_single_series(series, target_size=MAX_SEGMENT_SIZE):
+def interp_single_seg(series, target_size=MAX_SEGMENT_SIZE):
     # https://www.yiibai.com/scipy/scipy_interpolate.html
     size = len(series)
     if size == target_size:
@@ -158,14 +158,14 @@ def padzeros(series, target_size=MAX_SEGMENT_SIZE):
     return new_series
 
 
-def visualizeData(Z, labels, num_clusters, title='visualization&analysis.png'):
+def visualizeData(Z, labels, num_clusters, title='visualization_and_analysis.png'):
     '''
-    TSNE visualization&analysis of the points in latent space Z
+    TSNE visualization_and_analysis of the points in latent space Z
     :param Z: Numpy array containing points in latent space in which clustering was performed
     :param labels: True labels - used for coloring points
     :param num_clusters: Total number of clusters
     :param title: filename where the plot should be saved
-    :return: None - (side effect) saves clustering visualization&analysis plot in specified location
+    :return: None - (side effect) saves clustering visualization_and_analysis plot in specified location
     '''
     tsne = manifold.TSNE(n_components=2, init='pca', random_state=0)
     Z_tsne = tsne.fit_transform(Z)

@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-dataset = 'SHL'
+dataset = 'Trajectory_Feature_Dataset'
 
 x_features_series_train = np.load(f'../data/{dataset}_features/trjs_segs_features_train.npy', )
 x_features_series_test =  np.load(f'../data/{dataset}_features/trjs_segs_features_test.npy', )

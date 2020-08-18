@@ -61,7 +61,7 @@ class RP_FS_Centroid_Sequence(data_utils.Sequence):
         print('*enter get item ')
         batch_slice = slice(idx * self.batch_size, (idx + 1) * self.batch_size)
         batch_x = [
-            # utils.scale_RP_each_feature(self.RP_mats_h5array[batch_slice, ...]),
+            # utils.scale_RP_each_feature(self.multi_channel_RP_mats[batch_slice, ...]),
             self.RP_mats_h5array[batch_slice, ...],
             self.centroids[batch_slice],
             self.multi_feature_segs[batch_slice]
@@ -69,7 +69,7 @@ class RP_FS_Centroid_Sequence(data_utils.Sequence):
                    ]
 
         batch_y = [
-            # utils.scale_RP_each_feature(self.RP_mats_h5array[batch_slice, ...]),
+            # utils.scale_RP_each_feature(self.multi_channel_RP_mats[batch_slice, ...]),
             self.RP_mats_h5array[batch_slice, ...],
             self.labels[batch_slice],
             # utils.scale_segs_each_features(self.multi_feature_segs[batch_slice]),

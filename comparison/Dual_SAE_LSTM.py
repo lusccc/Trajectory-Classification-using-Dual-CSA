@@ -16,9 +16,9 @@ from keras.models import Model
 from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
 
-from Geolife_trajectory_extraction import modes_to_use
+from trajectory_extraction_geolife import modes_to_use
 from comparison.LSTM_AE import LSTM_AE
-from network_keras.CONV2D_AE import CONV2D_AE
+from keras_support.network_keras import CONV2D_AE
 from params import TOTAL_EMBEDDING_DIM, MULTI_GPU
 from utils import visualizeData
 
@@ -167,7 +167,7 @@ class SAE_embedding_visualization_callback(ModelCheckpoint):
             embedding = dual_encoder.predict([x_RP_test, x_centroids_test, np.squeeze(x_features_series_test)])
             y_true = np.argmax(y_test, axis=1)
             visualizeData(embedding, y_true, N_CLASS,
-                          './results_dsl/visualization&analysis/sae_embedding_epoch{}.png'.format(epoch))
+                          './results_dsl/visualization_and_analysis/sae_embedding_epoch{}.png'.format(epoch))
 
 
 def show_confusion_matrix():
@@ -193,7 +193,7 @@ def visualize_sae_embedding():
     sae = load_model('./results_dsl/sae_check_point.model', custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
     embedding = dual_encoder.predict([x_RP_test, x_centroids_test, x_features_series_test])
     y_true = np.argmax(y_test, axis=1)
-    visualizeData(embedding, y_true, N_CLASS, './results_dsl/visualization&analysis/best.png')
+    visualizeData(embedding, y_true, N_CLASS, './results_dsl/visualization_and_analysis/best.png')
 
 
 def visualize_dual_ae_embedding():
@@ -201,11 +201,11 @@ def visualize_dual_ae_embedding():
     load_model('./results_dsl/ts_conv_ae_check_point.model')
     embedding = dual_encoder.predict([x_RP_test, x_centroids_test, np.squeeze(x_features_series_test)])
     y_true = np.argmax(y_test, axis=1)
-    visualizeData(embedding, y_true, N_CLASS, './results_dsl/visualization&analysis/dual_ae_embedding.png')
+    visualizeData(embedding, y_true, N_CLASS, './results_dsl/visualization_and_analysis/dual_ae_embedding.png')
 
 
 def visualize_centroids():
-    visualizeData(x_centroids_test[0], modes_to_use, N_CLASS, './results_dsl/visualization&analysis/centroids_visualization.png')
+    visualizeData(x_centroids_test[0], modes_to_use, N_CLASS, './results_dsl/visualization_and_analysis/centroids_visualization.png')
 
 
 if __name__ == '__main__':

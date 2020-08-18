@@ -8,7 +8,7 @@ from geopy.distance import geodesic
 from tensorflow.python.keras.utils.np_utils import to_categorical
 
 from params import *
-from utils import segment_single_series, check_lat_lng, calc_initial_compass_bearing, interp_single_series
+from utils import segment_single_series, check_lat_lng, calc_initial_compass_bearing, interp_single_seg
 from utils import timestamp_to_hour, scale_segs_each_features
 
 # 0,    1,    2,   3,         4
@@ -36,8 +36,8 @@ if NO_LIMIT:
 
 
 def do_segment_trjs(trjs, labels, seg_size):
-    total_trjs_segs = []
-    total_trjs_segs_labels = []
+    total_trj_segs = []
+    total_trj_seg_labels = []
     for trj, label in zip(trjs, labels):
         # first, split based on long stay points
         delta_ts = np.diff(trj[:,0])
@@ -45,18 +45,18 @@ def do_segment_trjs(trjs, labels, seg_size):
         if len(split_idx[0]) > 0:
             trj_segs = np.split(trj,split_idx[0]+1)
             trj_segs = [seg for seg in trj_segs if seg.shape[0] > 0]
-            trj_segs_labels = [label for _ in range(len(trj_segs))]
+            trj_seg_labels = [label for _ in range(len(trj_segs))]
         else:
             trj_segs = [trj]
-            trj_segs_labels = [label]
+            trj_seg_labels = [label]
 
         # second, segment to sub_seg with max_size
-        for trj_seg, trj_seg_label in zip(trj_segs, trj_segs_labels):
+        for trj_seg, trj_seg_label in zip(trj_segs, trj_seg_labels):
             trj_sub_segs = segment_single_series(trj_seg, max_size=seg_size)
-            trj_sub_segs_labels = [label for _ in range(len(trj_sub_segs))]
-            total_trjs_segs.extend(trj_sub_segs)
-            total_trjs_segs_labels.extend(trj_sub_segs_labels)
-    return np.array(total_trjs_segs), np.array(total_trjs_segs_labels)
+            trj_sub_seg_labels = [label for _ in range(len(trj_sub_segs))]
+            total_trj_segs.extend(trj_sub_segs)
+            total_trj_seg_labels.extend(trj_sub_seg_labels)
+    return np.array(total_trj_segs), np.array(total_trj_seg_labels)
 
 
 def segment_trjs(trjs, labels, seg_size):
@@ -68,15 +68,15 @@ def segment_trjs(trjs, labels, seg_size):
             trjs[i * batch_size:(i + 1) * batch_size], labels[i * batch_size:(i + 1) * batch_size], seg_size)))
 
     res = np.array([[t.get()[0], t.get()[1]] for t in tasks])
-    trjs_segs = np.concatenate(res[:, 0])
-    trjs_segs_labels = np.concatenate(res[:, 1])
-    return trjs_segs, trjs_segs_labels
+    trj_segs = np.concatenate(res[:, 0])
+    trj_seg_labels = np.concatenate(res[:, 1])
+    return trj_segs, trj_seg_labels
 
 
-def do_filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels):
-    new_trjs_segs = []
-    new_trjs_segs_labels = []
-    for trj_seg, trj_seg_label in zip(trjs_segs, trjs_segs_labels):
+def do_filter_error_gps_data(trj_segs, trj_seg_labels):
+    filtered_trj_segs = []
+    filter_trj_seg_labels = []
+    for trj_seg, trj_seg_label in zip(trj_segs, trj_seg_labels):
         n_points = len(trj_seg)
         if n_points < MIN_N_POINTS:
             # print('gps points num not enough:{}'.format(n_points))
@@ -106,36 +106,39 @@ def do_filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels):
             if not check_lat_lng(p_b):
                 invalid_points.append(i + 1)
                 continue
-        new_trj_seg = np.delete(trj_seg, invalid_points, axis=0)
-        if len(new_trj_seg) < MIN_N_POINTS:
+        filtered_trj_seg = np.delete(trj_seg, invalid_points, axis=0)
+        if len(filtered_trj_seg) < MIN_N_POINTS:
             pass
-            # print('gps points num not enough:{}'.format(len(new_trj_seg)))
+            # print('gps points num not enough:{}'.format(len(filtered_trj_seg)))
         else:
-            new_trjs_segs.append(new_trj_seg)
-            new_trjs_segs_labels.append(trj_seg_label)
-    return np.array(new_trjs_segs), np.array(new_trjs_segs_labels)
+            filtered_trj_segs.append(filtered_trj_seg)
+            filter_trj_seg_labels.append(trj_seg_label)
+    return np.array(filtered_trj_segs), np.array(filter_trj_seg_labels)
 
 
-def filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels):
-    print('filter_trjs_segs_gps_data...')
+def filter_error_gps_data(trj_segs, trj_seg_labels):
+    print('filter_error_gps_data...')
     tasks = []
-    batch_size = int(len(trjs_segs) / n_cpus + 1)
+    batch_size = int(len(trj_segs) / n_cpus + 1)
     for i in range(0, n_cpus):
-        tasks.append(pool.apply_async(do_filter_trjs_segs_gps_data,
-                                      (trjs_segs[i * batch_size:(i + 1) * batch_size],
-                                       trjs_segs_labels[i * batch_size:(i + 1) * batch_size])))
+        tasks.append(pool.apply_async(do_filter_error_gps_data,
+                                      (trj_segs[i * batch_size:(i + 1) * batch_size],
+                                       trj_seg_labels[i * batch_size:(i + 1) * batch_size])))
     res = np.array([[t.get()[0], t.get()[1]] for t in tasks])
-    trjs_segs = np.concatenate(res[:, 0])
-    trjs_segs_labels = np.concatenate(res[:, 1])
-    return trjs_segs, trjs_segs_labels
+    trj_segs = np.concatenate(res[:, 0])
+    trj_seg_labels = np.concatenate(res[:, 1])
+    return trj_segs, trj_seg_labels
 
 
-def do_calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_function, seg_size):
-    valid_trjs_segs = []
-    trjs_segs_features = []
-    trjs_segs_features_labels = []
+def do_calc_trj_seg_clean_multi_features(trj_segs, trj_seg_labels, fill_seg_function, seg_size):
+    """
+    clean means remove noise data
+    """
+    valid_trj_segs = []
+    multi_feature_segs = []
+    multi_feature_seg_labels = []
     n_removed_points = []
-    for i, (trj_seg, trj_seg_label) in enumerate(zip(trjs_segs, trjs_segs_labels)):
+    for i, (trj_seg, trj_seg_label) in enumerate(zip(trj_segs, trj_seg_labels)):
         n_points = len(trj_seg)
         hours = []  # hour of timestamp
         delta_times = []
@@ -209,44 +212,44 @@ def do_calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_fu
 
         n_removed_points.append(0 if n_points == len(delta_times)+1 else n_points-len(delta_times)+1)
 
-        trj_seg_features = np.array(
+        multi_feature_seg = np.array(
             [[delta_t, hour, d, v, a, h, hc, hcr, s, tn] for delta_t, hour, d, v, a, h, hc, hcr, s, tn in
-             zip(fill_series_function(delta_times, target_size=seg_size),
-                 fill_series_function(hours, target_size=seg_size),
-                 fill_series_function(distances, target_size=seg_size),
-                 fill_series_function(velocities, target_size=seg_size),
-                 fill_series_function(accelerations, target_size=seg_size),
-                 fill_series_function(headings, target_size=seg_size),
-                 fill_series_function(heading_changes, target_size=seg_size),
-                 fill_series_function(heading_change_rates, target_size=seg_size),
-                 fill_series_function(stops, target_size=seg_size),
-                 fill_series_function(turnings, target_size=seg_size))]
+             zip(fill_seg_function(delta_times, target_size=seg_size),
+                 fill_seg_function(hours, target_size=seg_size),
+                 fill_seg_function(distances, target_size=seg_size),
+                 fill_seg_function(velocities, target_size=seg_size),
+                 fill_seg_function(accelerations, target_size=seg_size),
+                 fill_seg_function(headings, target_size=seg_size),
+                 fill_seg_function(heading_changes, target_size=seg_size),
+                 fill_seg_function(heading_change_rates, target_size=seg_size),
+                 fill_seg_function(stops, target_size=seg_size),
+                 fill_seg_function(turnings, target_size=seg_size))]
         )
-        trj_seg_features = np.expand_dims(trj_seg_features, axis=0)
-        trjs_segs_features.append(trj_seg_features)
-        trjs_segs_features_labels.append(trj_seg_label)
+        multi_feature_seg = np.expand_dims(multi_feature_seg, axis=0)
+        multi_feature_segs.append(multi_feature_seg)
+        multi_feature_seg_labels.append(trj_seg_label)
 
-        valid_trjs_segs.append(i)
+        valid_trj_segs.append(i)
     print('* end a thread for calc_trjs_segs_clean_features')
-    return np.array(trjs_segs_features), np.array(trjs_segs_features_labels), valid_trjs_segs, n_removed_points
+    return np.array(multi_feature_segs), np.array(multi_feature_seg_labels), valid_trj_segs, n_removed_points
 
 
-def calc_trjs_segs_clean_features(trjs_segs, trjs_segs_labels, fill_series_function, seg_size):
+def calc_trj_seg_clean_features(trj_segs, trj_seg_labels, fill_seg_function, seg_size):
     print('calc_trjs_segs_clean_features...')
     tasks = []
-    batch_size = int(len(trjs_segs) / n_cpus + 1)
+    batch_size = int(len(trj_segs) / n_cpus + 1)
     for i in range(0, n_cpus):
-        tasks.append(pool.apply_async(do_calc_trjs_segs_clean_features,
-                                      (trjs_segs[i * batch_size:(i + 1) * batch_size],
-                                       trjs_segs_labels[i * batch_size:(i + 1) * batch_size],
-                                       fill_series_function, seg_size)))
+        tasks.append(pool.apply_async(do_calc_trj_seg_clean_multi_features,
+                                      (trj_segs[i * batch_size:(i + 1) * batch_size],
+                                       trj_seg_labels[i * batch_size:(i + 1) * batch_size],
+                                       fill_seg_function, seg_size)))
     res = np.array([[t.get()[0], t.get()[1], t.get()[2], t.get()[3]] for t in tasks])
     print('merging...')
-    trjs_segs_features = np.concatenate(res[:, 0])
-    trjs_segs_features_labels = np.concatenate(res[:, 1])
-    valid_trjs_segs = np.concatenate(res[:, 2])
+    multi_feature_segs = np.concatenate(res[:, 0])
+    multi_feature_seg_labels = np.concatenate(res[:, 1])
+    valid_trj_segs = np.concatenate(res[:, 2])
     n_removed_points = np.concatenate(res[:, 3])
-    return trjs_segs_features, trjs_segs_features_labels, valid_trjs_segs, n_removed_points
+    return multi_feature_segs, multi_feature_seg_labels, valid_trj_segs, n_removed_points
 
 
 def calc_trjs_segs_noise_features(trjs_segs, trjs_segs_labels, fill_series_function, valid_trjs_segs, seg_size):
@@ -351,12 +354,12 @@ def random_drop_points(trjs, percentage=0.1):
 if __name__ == '__main__':
     start = time.time()
     parser = argparse.ArgumentParser(description='TRJ_SEG_FEATURE')
-    parser.add_argument('--trjs_path', type=str)
-    parser.add_argument('--labels_path', type=str)
+    parser.add_argument('--trjs_path', type=str, required=True)
+    parser.add_argument('--labels_path', type=str, required=True)
     parser.add_argument('--seg_size', type=int, default=MAX_SEGMENT_SIZE)
     parser.add_argument('--feature_set', type=str)
-    parser.add_argument('--data_type', type=str)  # train or test
-    parser.add_argument('--save_dir', type=str)
+    parser.add_argument('--data_type', type=str, required=True)  # train or test
+    parser.add_argument('--save_dir', type=str, required=True)
     # note！！！: after random drop points in trajectory,
     # the produced features series will have the different number of samples to the original features series
     parser.add_argument('--random_drop_percentage', type=float, default='0.')
@@ -380,38 +383,31 @@ if __name__ == '__main__':
         print(f'random_drop_percentage:{args.random_drop_percentage}')
         trjs = random_drop_points(trjs, args.random_drop_percentage)
 
-    fill_series_function = interp_single_series
+    fill_seg_function = interp_single_seg
 
-    trjs_segs, trjs_segs_labels = segment_trjs(trjs, labels, seg_size)
-    print('total n_points:{}'.format(np.sum([len(seg) for seg in trjs_segs])))
-    trjs_segs, trjs_segs_labels = filter_trjs_segs_gps_data(trjs_segs, trjs_segs_labels)
-    print('total n_points after filtering invalid gps:{}'.format(np.sum([len(seg) for seg in trjs_segs])))
-    trjs_segs_features, trjs_segs_features_labels, _, n_removed_points = calc_trjs_segs_clean_features(trjs_segs,
-                                                                                                       trjs_segs_labels,
-                                                                                                       fill_series_function,
-                                                                                                       seg_size)
+    trj_segs, trj_seg_labels = segment_trjs(trjs, labels, seg_size)
+    print('total n_points:{}'.format(np.sum([len(seg) for seg in trj_segs])))
+    trj_segs, trj_seg_labels = filter_error_gps_data(trj_segs, trj_seg_labels)
+    print('total n_points after filtering invalid gps:{}'.format(np.sum([len(seg) for seg in trj_segs])))
+    multi_feature_segs, multi_feature_seg_labels, _, n_removed_points = calc_trj_seg_clean_features(trj_segs,
+                                                                                                    trj_seg_labels,
+                                                                                                    fill_seg_function,
+                                                                                                    seg_size)
     print(f'total invalid MF n_points:{np.sum(n_removed_points)}')
-    # trjs_segs_noise_features, trjs_segs_noise_features_labels = calc_trjs_segs_noise_features(trjs_segs, trjs_segs_labels,
-    #                                                                                           fill_series_function, _, seg_size)
+    # trjs_segs_noise_features, trjs_segs_noise_features_labels = calc_trjs_segs_noise_features(trj_segs, trj_seg_labels,
+    #                                                                                           fill_seg_function, _, seg_size)
 
     end = time.time()
     print('Running time: %s Seconds' % (end - start))
 
-    print('saving files...')
     save_dir = args.save_dir
     data_type = args.data_type
+    print(f'saving files to {save_dir}')
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    np.save(f'{save_dir}/trjs_segs_features_{data_type}_noscale.npy',
-            trjs_segs_features[:, :, :, feature_set])
-    np.save(f'{save_dir}/trjs_segs_features_{data_type}.npy',
-            scale_segs_each_features(trjs_segs_features[:, :, :, feature_set]))  # note: scaled!
-    np.save(f'{save_dir}/trjs_segs_features_labels_{data_type}.npy',
-            to_categorical(trjs_segs_features_labels, num_classes=N_CLASS))  # labels to one-hot
-
-    # np.save(f'{save_dir}/trjs_segs_noise_features_{data_type}_noscale.npy',
-    #         trjs_segs_noise_features[:, :, :, feature_set])
-    # np.save(f'{save_dir}/trjs_segs_noise_features_{data_type}.npy',
-    #         scale_segs_each_features(trjs_segs_noise_features[:, :, :, feature_set]))  # note: scaled!
-    # np.save(f'{save_dir}/trjs_segs_noise_features_labels_{data_type}.npy',
-    #         to_categorical(trjs_segs_noise_features_labels, num_classes=N_CLASS))  # labels to one-hot
+    multi_feature_segs = multi_feature_segs[:, :, :, feature_set]
+    np.save(f'{save_dir}/multi_feature_segs_{data_type}.npy',multi_feature_segs)
+    multi_feature_segs_normalized = scale_segs_each_features(multi_feature_segs)
+    np.save(f'{save_dir}/multi_feature_segs_{data_type}_normalized.npy', multi_feature_segs_normalized)  # note: scaled!
+    np.save(f'{save_dir}/multi_feature_seg_labels_{data_type}.npy',
+            to_categorical(multi_feature_seg_labels, num_classes=N_CLASS))  # labels to one-hot

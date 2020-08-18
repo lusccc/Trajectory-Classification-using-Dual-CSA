@@ -7,19 +7,22 @@ from netwok_torch.Conv1D_AE import Conv1D_AE
 from netwok_torch.Conv2D_AE import Conv2D_AE
 
 
-class PEDCC_Classifier(nn.Module):
+class PCC_Layer(nn.Module):
 
-    def __init__(self, alpha, centroids):
+    def __init__(self, centroids, alpha=1.):
         """
         :param centroids: tensor, predefined centroids, shape: (n_class, emb_dim)
         """
-        super(PEDCC_Classifier, self).__init__()
+        super(PCC_Layer, self).__init__()
         self.alpha = alpha
         self.centroids = centroids
 
     def forward(self, emb):
         """
+        see paper `Unsupervised Deep Embedding for Clustering Analysis`
+
         qij = 1/(1+dist(zi, uj)^2), then normalize it.
+
         qij: each row represent the probability of a sample belong to each class (centroid)
 
         Examples
@@ -41,21 +44,28 @@ class PEDCC_Classifier(nn.Module):
 
 
 class Dual_CSA(nn.Module):
-    def __init__(self, n_channels, RP_emb_dim, FS_emb_dim):
+    def __init__(self, n_channels, RP_emb_dim, FS_emb_dim, centroids):
         super(Dual_CSA, self).__init__()
         self.RP_AE = Conv2D_AE(n_channels, RP_emb_dim)
         self.FS_AE = Conv1D_AE(n_channels, FS_emb_dim)
+        self.centroids = centroids
+        self.PCC = PCC_Layer(self.centroids, 1)
 
-    def forward(self, RP_mat, centroids, features_seg):
+    def forward(self, RP_mat, features_seg):
         RP_recon, RP_emb = self.RP_AE(RP_mat)
         FS_recon, FS_emb = self.FS_AE(features_seg)
         concat_emb = torch.cat((RP_emb, FS_emb), dim=1)
-        print()
-        return RP_recon, FS_recon, concat_emb
+        soft_label = self.PCC(concat_emb)
+        return RP_recon, soft_label, FS_recon
 
+if __name__ == '__main__':
+    ces = torch.tensor(
+        [[1, 1, 1, 1],
+         [2, 2, 2, 2],
+         [3, 3, 3, 3],
+         [4, 4, 4, 4]]
+    )
+    model = Dual_CSA(5, 2, 2, ces)
+    print(model)
+    summary(model, [(5, 184, 184), (5, 200)])
 
-model = Dual_CSA(5, 152, 152)
-print(model)
-summary(model, [(5, 184, 184), (5, 304), (5, 200)])
-# summary(model.RP_AE,(5, 184, 184))
-# summary(model.FS_AE,(5,200))

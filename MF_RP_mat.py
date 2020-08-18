@@ -188,22 +188,8 @@ if __name__ == '__main__':
     print(f'n_samples:{n_samples}, n_parts:{n_parts}, part_size:{part_size}')
     for i in range(n_parts):
         full_save_path = save_path if n_parts == 1 else save_path+f"_p{i}"
-        generate_RP_mats(trjs_segs_features[i * part_size: (i + 1) * part_size], dim, tau, n_features, full_save_path,
-                         )
+        generate_RP_mats(trjs_segs_features[i * part_size: (i + 1) * part_size], dim, tau, n_features, full_save_path)
 
-    # for i in range(n_features):
-    #     single_feature_segs = trjs_segs_features[:, :, i]  # (n, seg_size)
-    #     a1 = gen_single_RP_mat(single_feature_segs[0], dim, tau)
-    #     # generate RP mat for each seg
-    #     feature_RP_mats = __gen_multiple_RP_mats(multi_series=single_feature_segs[:], scale=False, dim=dim, tau=tau)
-    #     feature_RP_mats = np.expand_dims(feature_RP_mats, axis=3)
-    #     features_RP_mats.append(feature_RP_mats)
-    #     max = np.max(feature_RP_mats)
-    #     min = np.min(feature_RP_mats)
-    #     print('RP mat value range:', min, max)
-    # features_RP_mats = np.concatenate(features_RP_mats, axis=3)
-    #
-    # print('features_RP_mats.shape:{}'.format(features_RP_mats.shape))
     end = time.time()
     print('Running time: %s Seconds' % (end - start))
     # np.save(args.save_path, scale_RP_each_feature(features_RP_mats))  # note scaled!

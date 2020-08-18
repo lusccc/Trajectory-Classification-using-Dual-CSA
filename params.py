@@ -8,7 +8,7 @@ TOTAL_EMBEDDING_DIM = 48
 # 0,    1,    2,   3,         4           5
 # walk, bike, bus, driving, train/subway, run
 # modes_to_use = [0, 1, 2, 3, 4] # geolife
-modes_to_use = [0, 1, 2, 3, 4, ]  # SHL
+modes_to_use = [0, 1, 2, 3, 4, ]  # Trajectory_Feature_Dataset
 
 N_CLASS = len(modes_to_use)
 

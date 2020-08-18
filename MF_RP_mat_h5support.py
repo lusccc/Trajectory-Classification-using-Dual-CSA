@@ -14,16 +14,9 @@ from pyts.image.recurrence import _trajectories
 from params import DIM, TAU, FEATURES_SET_1
 from utils import scale_any_shape_data, scale_RP_each_feature, synchronized_open_file, synchronized_close_file
 
-#  Settings for the embedding
-
-# Distance metric in phase space ->
-# Possible choices ("manhattan","euclidean","supremum")
-METRIC = "euclidean"
-
-EPS = 0.05  # Fixed recurrence threshold
 
 lock = threading.Lock()
-DATA_NAME = 'RP_data'
+H5_NODE_NAME = 'RP_data'
 
 
 def __gen_multiple_RP_mats(multi_series, scale=False, dim=DIM, tau=TAU):
@@ -116,13 +109,13 @@ def gen_single_RP_mat(singel_series, dimension=DIM, time_delay=TAU):
     return distance_mat
 
 
-def generate_RP_mats(trjs_segs_features, dim, tau, n_features, save_path, h5node_name):
+def generate_RP_mats(multi_feature_segs, dim, tau, n_features, save_path, h5node_name):
     print('gen_RP_mats...')
     tasks = []
-    batch_size = int(len(trjs_segs_features) / n_cpus + 1)
-    for i in range(0, n_cpus):
+    batch_size = int(len(multi_feature_segs) / n_thread + 1)
+    for i in range(0, n_thread):
         tasks.append(pool.apply_async(do_generate_RP_mats,
-                                      (trjs_segs_features[i * batch_size:(i + 1) * batch_size], dim, tau, n_features, save_path,
+                                      (multi_feature_segs[i * batch_size:(i + 1) * batch_size], dim, tau, n_features, save_path,
                                        h5node_name
                                        )))
     res = [t.get() for t in tasks]
@@ -140,27 +133,27 @@ def do_generate_RP_mats(multi_features_segs, dim, tau, n_features, save_path, h5
             single_feature_seg = multi_features_seg[:, i]  # (n, seg_size)
             RP_mat = gen_single_RP_mat(single_feature_seg, dim,
                                        tau)  # (n_vec, n_vec)  , n_vec: number of phase space trajectory
-            RP_mat = np.expand_dims(RP_mat, 2)  # (n_vec, n_vec, 1)
+            RP_mat = np.expand_dims(RP_mat, 0)  # (1, n_vec, n_vec)
             multi_channels_RP_mat.append(RP_mat)
-        multi_channels_RP_mat = np.stack(multi_channels_RP_mat, axis=2)  # (n_vec, n_vec, n_feature, 1)
-        multi_channels_RP_mat = np.squeeze(multi_channels_RP_mat)  # (n_vec, n_vec, n_feature)
-        multi_channels_RP_mat = np.expand_dims(multi_channels_RP_mat, axis=0) # (1, n_vec, n_vec, n_feature)
+        multi_channels_RP_mat = np.stack(multi_channels_RP_mat, axis=0)  # ( n_feature, 1, n_vec, n_vec)
+        multi_channels_RP_mat = np.squeeze(multi_channels_RP_mat)  # (n_feature, n_vec, n_vec )
+        multi_channels_RP_mat = np.expand_dims(multi_channels_RP_mat, axis=0) # (1, n_feature, n_vec, n_vec)
         RP_mats_h5array.append(multi_channels_RP_mat)
-    print(RP_mats_h5array.shape)
     synchronized_close_file(lock, RP_mats_h5file)
     print('*end a thread')
 
 if __name__ == '__main__':
-    n_cpus = multiprocessing.cpu_count()
-    print(f'n_thread:{n_cpus}')
-    pool = multiprocessing.Pool(processes=1) # pytables multi-thread support TODO
+    # currently pytables not support multi-thread, hence processes=1
+    n_thread = 1
+    print(f'n_thread:{n_thread}')
+    pool = multiprocessing.Pool(processes=1)
     start = time.time()
     parser = argparse.ArgumentParser(description='RP_mat')
     parser.add_argument('--dim', default=DIM, type=int)
     parser.add_argument('--tau', default=TAU, type=int)
     parser.add_argument('--feature_set', type=str)
-    parser.add_argument('--trjs_segs_features_path', type=str)
-    parser.add_argument('--save_path', type=str)
+    parser.add_argument('--multi_feature_segs_path', type=str, required=True)
+    parser.add_argument('--save_path', type=str, required=True)
 
     args = parser.parse_args()
     dim = args.dim
@@ -173,40 +166,23 @@ if __name__ == '__main__':
         feature_set = [int(item) for item in args.feature_set.split(',')]
     print('feature_set:{}'.format(feature_set))
 
-    trjs_segs_features = np.load(args.trjs_segs_features_path)
+    multi_feature_segs = np.load(args.multi_feature_segs_path)
     features_RP_mats = []
-    n_features = trjs_segs_features.shape[3]
-    n_samples = trjs_segs_features.shape[0]
-    n_timestamps = trjs_segs_features.shape[2]
-    trjs_segs_features = np.squeeze(trjs_segs_features)
+    n_features = multi_feature_segs.shape[3]
+    n_samples = multi_feature_segs.shape[0]
+    n_timestamps = multi_feature_segs.shape[2]
+    multi_feature_segs = np.squeeze(multi_feature_segs)
 
     n_vectors = n_timestamps - (dim - 1) * tau
     with tb.open_file(args.save_path, mode='w') as RP_mats_h5:
         RP_mats_h5array = RP_mats_h5.create_earray(
             '/',
-            DATA_NAME,  # 数据名称，之后需要通过它来访问数据
-            tb.Float32Atom(),  # 设定数据格式（和data1格式相同）
-            shape=(0, n_vectors, n_vectors, n_features),  # 第一维的 0 表示数据可沿行扩展
+            H5_NODE_NAME,
+            tb.Float32Atom(),
+            shape=(0, n_features, n_vectors, n_vectors),
             # filters=tb.Filters(complevel=5, complib='blosc'),
             expectedrows=n_samples
         )
-    generate_RP_mats(trjs_segs_features, dim, tau, n_features, save_path, DATA_NAME)
-    RP_mats_h5file = synchronized_open_file(lock, save_path, mode='r')
-    RP_mats_h5array = RP_mats_h5file.get_node('/' + DATA_NAME)
-    print(RP_mats_h5array.shape)
-    # for i in range(n_features):
-    #     single_feature_segs = trjs_segs_features[:, :, i]  # (n, seg_size)
-    #     a1 = gen_single_RP_mat(single_feature_segs[0], dim, tau)
-    #     # generate RP mat for each seg
-    #     feature_RP_mats = __gen_multiple_RP_mats(multi_series=single_feature_segs[:], scale=False, dim=dim, tau=tau)
-    #     feature_RP_mats = np.expand_dims(feature_RP_mats, axis=3)
-    #     features_RP_mats.append(feature_RP_mats)
-    #     max = np.max(feature_RP_mats)
-    #     min = np.min(feature_RP_mats)
-    #     print('RP mat value range:', min, max)
-    # features_RP_mats = np.concatenate(features_RP_mats, axis=3)
-    #
-    # print('features_RP_mats.shape:{}'.format(features_RP_mats.shape))
+    generate_RP_mats(multi_feature_segs, dim, tau, n_features, save_path, H5_NODE_NAME)
     end = time.time()
     print('Running time: %s Seconds' % (end - start))
-    # np.save(args.save_path, scale_RP_each_feature(features_RP_mats))  # note scaled!
