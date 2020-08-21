@@ -4,6 +4,7 @@ import sys
 import threading
 import time
 from math import cos, pi
+from logzero import logger
 
 import numpy as np
 import tables as tb
@@ -14,8 +15,7 @@ from pyts.image.recurrence import _trajectories
 from params import DIM, TAU, FEATURES_SET_1
 from utils import scale_any_shape_data, scale_RP_each_feature, synchronized_open_file, synchronized_close_file
 
-
-lock = threading.Lock()
+LOCK = threading.Lock()
 H5_NODE_NAME = 'RP_data'
 
 
@@ -27,11 +27,11 @@ def __gen_multiple_RP_mats(multi_series, scale=False, dim=DIM, tau=TAU):
 
     n_series = len(multi_series)
 
-    print('calc distance_mats ....')
+    logger.info('calc distance_mats ....')
     # each series generates n_vectors phase space trajectories
     stri = multi_series.strides
     its = multi_series.itemsize
-    print(stri, its)
+    logger.info(stri, its)
     phase_vectorss = _trajectories(multi_series, dimension=dim, time_delay=tau)
     n_vectors = phase_vectorss.shape[1]
     # calc distances mats, 1 mat for each series.
@@ -41,7 +41,7 @@ def __gen_multiple_RP_mats(multi_series, scale=False, dim=DIM, tau=TAU):
         np.sum((phase_vectorss[:, None, :, :] - phase_vectorss[:, :, None, :]) ** 2,
                axis=3, dtype='float32')
     )
-    print('end calc distance_mats')
+    logger.info('end calc distance_mats')
 
     mycode = False
     if mycode:
@@ -49,7 +49,7 @@ def __gen_multiple_RP_mats(multi_series, scale=False, dim=DIM, tau=TAU):
         RP_mats = []  # !!skipped Heavside function
         count = 0
         for distance_mat, phase_vectors in zip(distance_mats, phase_vectorss):
-            print('{}/{}'.format(count, n_series))
+            logger.info('{}/{}'.format(count, n_series))
             # now no need to use this method since we want to calc sign value
             # https://stackoverflow.com/questions/13079563/how-does-condensed-distance-matrix-work-pdist
             # distances = pdist(phase_vectors, )
@@ -92,13 +92,12 @@ def sign(m, n):
         return 1
 
 
-
-
-
 def gen_single_RP_mat(singel_series, dimension=DIM, time_delay=TAU):
-    # The strides of an array tell us how many bytes we have to skip in memory to move to the next position along a certain axis.
+    # The strides of an array tell us how many bytes we have to skip in memory to move to the next position along a
+    # certain axis.
     n_timestamps = len(singel_series)
     s = singel_series.strides[0]
+    # based on source code in pyts.image.recurrence.RecurrencePlot.transform
     shape_new = (n_timestamps - (dimension - 1) * time_delay, dimension)
     strides_new = (s, time_delay * s)
     phase_space_trjs = as_strided(singel_series, shape_new, strides_new)
@@ -109,45 +108,47 @@ def gen_single_RP_mat(singel_series, dimension=DIM, time_delay=TAU):
     return distance_mat
 
 
-def generate_RP_mats(multi_feature_segs, dim, tau, n_features, save_path, h5node_name):
-    print('gen_RP_mats...')
+def generate_RP_mats(n_thread, multi_feature_segs, dim, tau, n_features, save_path, h5node_name):
+    logger.info('gen_RP_mats...')
     tasks = []
     batch_size = int(len(multi_feature_segs) / n_thread + 1)
     for i in range(0, n_thread):
         tasks.append(pool.apply_async(do_generate_RP_mats,
-                                      (multi_feature_segs[i * batch_size:(i + 1) * batch_size], dim, tau, n_features, save_path,
-                                       h5node_name
+                                      (multi_feature_segs[i * batch_size:(i + 1) * batch_size], dim, tau,
+                                       n_features, save_path, h5node_name
                                        )))
     res = [t.get() for t in tasks]
 
 
 def do_generate_RP_mats(multi_features_segs, dim, tau, n_features, save_path, h5node_name):
-    '''
+    """
     :param multi_features_segs: (n, seg_size, n_features)
-    '''
-    RP_mats_h5file = synchronized_open_file(lock, save_path, mode='a')
+    """
+    RP_mats_h5file = synchronized_open_file(LOCK, save_path, mode='a')
     RP_mats_h5array = RP_mats_h5file.get_node('/' + h5node_name)
     for multi_features_seg in multi_features_segs:
         multi_channels_RP_mat = []
         for i in range(n_features):
-            single_feature_seg = multi_features_seg[:, i]  # (n, seg_size)
+            single_feature_seg = multi_features_seg[i, :]  # (n, seg_size)
             RP_mat = gen_single_RP_mat(single_feature_seg, dim,
                                        tau)  # (n_vec, n_vec)  , n_vec: number of phase space trajectory
             RP_mat = np.expand_dims(RP_mat, 0)  # (1, n_vec, n_vec)
             multi_channels_RP_mat.append(RP_mat)
         multi_channels_RP_mat = np.stack(multi_channels_RP_mat, axis=0)  # ( n_feature, 1, n_vec, n_vec)
         multi_channels_RP_mat = np.squeeze(multi_channels_RP_mat)  # (n_feature, n_vec, n_vec )
-        multi_channels_RP_mat = np.expand_dims(multi_channels_RP_mat, axis=0) # (1, n_feature, n_vec, n_vec)
+        multi_channels_RP_mat = np.expand_dims(multi_channels_RP_mat, axis=0)  # (1, n_feature, n_vec, n_vec)
         RP_mats_h5array.append(multi_channels_RP_mat)
-    synchronized_close_file(lock, RP_mats_h5file)
-    print('*end a thread')
+    synchronized_close_file(LOCK, RP_mats_h5file)
+    logger.info('*end a thread')
+
 
 if __name__ == '__main__':
+    start = time.time()
     # currently pytables not support multi-thread, hence processes=1
     n_thread = 1
-    print(f'n_thread:{n_thread}')
+    logger.info(f'n_thread:{n_thread}')
     pool = multiprocessing.Pool(processes=1)
-    start = time.time()
+
     parser = argparse.ArgumentParser(description='RP_mat')
     parser.add_argument('--dim', default=DIM, type=int)
     parser.add_argument('--tau', default=TAU, type=int)
@@ -156,24 +157,19 @@ if __name__ == '__main__':
     parser.add_argument('--save_path', type=str, required=True)
 
     args = parser.parse_args()
-    dim = args.dim
-    tau = args.tau
-    save_path = args.save_path
-    print('dim:{} tau:{}'.format(dim, tau))
+    logger.info('dim:{} tau:{}'.format(args.dim, args.tau))
     if args.feature_set is None:
         feature_set = FEATURES_SET_1
     else:
         feature_set = [int(item) for item in args.feature_set.split(',')]
-    print('feature_set:{}'.format(feature_set))
+    logger.info('feature_set:{}'.format(feature_set))
 
-    multi_feature_segs = np.load(args.multi_feature_segs_path)
-    features_RP_mats = []
-    n_features = multi_feature_segs.shape[3]
+    multi_feature_segs = np.load(args.multi_feature_segs_path)  # !!note load un-normalized data to generate RP
+    n_features = multi_feature_segs.shape[1]
     n_samples = multi_feature_segs.shape[0]
     n_timestamps = multi_feature_segs.shape[2]
-    multi_feature_segs = np.squeeze(multi_feature_segs)
 
-    n_vectors = n_timestamps - (dim - 1) * tau
+    n_vectors = n_timestamps - (args.dim - 1) * args.tau
     with tb.open_file(args.save_path, mode='w') as RP_mats_h5:
         RP_mats_h5array = RP_mats_h5.create_earray(
             '/',
@@ -183,6 +179,6 @@ if __name__ == '__main__':
             # filters=tb.Filters(complevel=5, complib='blosc'),
             expectedrows=n_samples
         )
-    generate_RP_mats(multi_feature_segs, dim, tau, n_features, save_path, H5_NODE_NAME)
+    generate_RP_mats(n_thread, multi_feature_segs, args.dim, args.tau, n_features, args.save_path, H5_NODE_NAME)
     end = time.time()
-    print('Running time: %s Seconds' % (end - start))
+    logger.info('Running time: %s Seconds' % (end - start))

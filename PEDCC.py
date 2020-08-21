@@ -74,15 +74,15 @@ class PEDDC(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PEDCC')
-    parser.add_argument('--features_path', default='None', type=str)
+    # parser.add_argument('--features_path', default='None', type=str)
     parser.add_argument('--save_dir', type=str)
-    parser.add_argument('--data_type', type=str)  # train or test
+    # parser.add_argument('--data_type', type=str)  # train or test
     parser.add_argument('--dim', default=TOTAL_EMBEDDING_DIM, type=int)
     args = parser.parse_args()
-    features_path = args.features_path
+    # features_path = args.features_path
     save_dir = args.save_dir
     dim = args.dim
-    data_type = args.data_type
+    # data_type = args.data_type
     scale = True
 
     pedcc = PEDDC(dim)

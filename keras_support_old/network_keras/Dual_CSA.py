@@ -339,7 +339,7 @@ def visualize_centroids():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DSAE')
-    parser.add_argument('--dataset', type=str, required=True)
+    parser.add_argument('--dataset_name', type=str, required=True)
     parser.add_argument('--results_path', default='./results/default', type=str)
     parser.add_argument('--alpha', default=ALPHA, type=float)
     parser.add_argument('--beta', default=BETA, type=float)
@@ -369,7 +369,7 @@ if __name__ == '__main__':
 
     pathlib.Path(os.path.join(results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
 
-    log(f'dataset:{dataset}, results_path:{results_path} , loss weight:{alpha},{beta},{gamma},'
+    log(f'dataset_name:{dataset}, results_path:{results_path} , loss weight:{alpha},{beta},{gamma},'
         f'RP_emb_dim:{RP_emb_dim}, ts_emb_dim:{ts_emb_dim}, no_pretrain:{no_pretrain}, no_joint_train:{no_pretrain}, '
         f'n_trainset_split_parts:{n_trainset_split_parts}')
 

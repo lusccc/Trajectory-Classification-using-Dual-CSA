@@ -101,12 +101,14 @@ if __name__ == '__main__':
         feature_set = FEATURES_SET_1
     else:
         feature_set = [int(item) for item in args.feature_set.split(',')]
+
     # stack to get all data
     trjs_segs_features = np.vstack(
         [np.load(args.trjs_segs_features_train_path), np.load(args.trjs_segs_features_test_path)])
     trjs_segs_features = np.squeeze(trjs_segs_features)
     n_features = trjs_segs_features.shape[2]
     seg_size = trjs_segs_features.shape[1]
+
     print('calc_tau...')
     tau = calc_tau(trjs_segs_features[:], n_features, seg_size)
     print('calc_dim...')

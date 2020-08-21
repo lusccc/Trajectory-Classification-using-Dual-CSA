@@ -45,11 +45,11 @@ def scale_RP_each_feature(RP_all_features):
 
 def scale_segs_each_features(segs_all_features):
     scaler = StandardScaler()
-    n_features = segs_all_features.shape[3]
+    n_features = segs_all_features.shape[1]
     for i in range(n_features):
-        segs_single_feature = segs_all_features[:, :, :, i]
+        segs_single_feature = segs_all_features[:, i, :]
         scaled = scale_any_shape_data(segs_single_feature, scaler)
-        segs_all_features[:, :, :, i] = scaled
+        segs_all_features[:, i, :] = scaled
     return segs_all_features
 
 
@@ -202,3 +202,8 @@ def synchronized_close_file(lock, self, *args, **kwargs):
         return self.close(*args, **kwargs)
 
 tb_filters = tb.Filters(complevel=5, complib='blosc')
+
+
+def to_categorical(y, num_classes):
+    """ 1-hot encodes a tensor """
+    return np.eye(num_classes, dtype='uint8')[y]

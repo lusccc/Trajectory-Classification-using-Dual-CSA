@@ -44,18 +44,22 @@ class PCC_Layer(nn.Module):
 
 
 class Dual_CSA(nn.Module):
-    def __init__(self, n_channels, RP_emb_dim, FS_emb_dim, centroids):
+    def __init__(self, n_channels, RP_emb_dim, FS_emb_dim, centroids, pretrain=True):
         super(Dual_CSA, self).__init__()
         self.RP_AE = Conv2D_AE(n_channels, RP_emb_dim)
         self.FS_AE = Conv1D_AE(n_channels, FS_emb_dim)
         self.centroids = centroids
         self.PCC = PCC_Layer(self.centroids, 1)
+        self.pretrain = pretrain
 
-    def forward(self, RP_mat, features_seg):
+    def forward(self, RP_mat, FS):
         RP_recon, RP_emb = self.RP_AE(RP_mat)
-        FS_recon, FS_emb = self.FS_AE(features_seg)
-        concat_emb = torch.cat((RP_emb, FS_emb), dim=1)
-        soft_label = self.PCC(concat_emb)
+        FS_recon, FS_emb = self.FS_AE(FS)
+        if not self.pretrain:
+            concat_emb = torch.cat((RP_emb, FS_emb), dim=1)
+            soft_label = self.PCC(concat_emb)
+        else:
+            soft_label = None
         return RP_recon, soft_label, FS_recon
 
 if __name__ == '__main__':
