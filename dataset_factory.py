@@ -47,6 +47,10 @@ class Trajectory_Feature_Dataset(Dataset):
 
 
 def calc_RP_data_mean_std(dataset_name, data_type, use_gpu=False):
+    if os.path.exists(f'./data/{dataset_name}_features/mean.npy') and os.path.exists(f'./data/{dataset_name}_features/std.npy'):
+        mean, std = np.load(f'./data/{dataset_name}_features/mean.npy'), np.load(f'./data/{dataset_name}_features/std.npy')
+        logger.info(f'loading calculated mean and std from file, mean:{mean}, std:{std}')
+        return mean, std
     logger.info(f'calc_RP_data_mean_std for {dataset_name}...')
     class RP_Data(Dataset):
         def __init__(self, dataset_name, data_type):
@@ -94,6 +98,9 @@ def calc_RP_data_mean_std(dataset_name, data_type, use_gpu=False):
     logger.info(f"Std:{std}")
     logger.info("calc_RP_data_mean_std elapsed time: %.3f seconds" % (timeit.time.perf_counter() - start))
     dataset.multi_channel_RP_mats_h5_file.close()
+    logger.info('saving calculated mean and std')
+    np.save(f'./data/{dataset_name}_features/mean.npy', mean.numpy())
+    np.save(f'./data/{dataset_name}_features/std.npy', std.numpy())
     return mean, std
 
 

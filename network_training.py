@@ -3,6 +3,7 @@ import os
 import pathlib
 import random
 import sys
+from math import inf
 
 import torch.distributed as dist
 import torch
@@ -14,7 +15,6 @@ from torch.utils.data import DataLoader
 import torch.multiprocessing as mp
 import dataset_factory
 from netwok_torch.Dual_CSA import Dual_CSA
-from netwok_torch.pytorchtools import EarlyStopping
 from params import *
 import numpy as np
 import logzero
@@ -40,11 +40,18 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
     model.pretrain = True
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     recon_criterion = nn.MSELoss()
-    early_stopping = EarlyStopping(patience=20, verbose=True, path=os.path.join(args.results_path, 'pretrained_AE.pt'),
-                                   trace_func=logger.info)
-    train_losses = []
-    test_losses = []
+
+    best_score = inf
+    not_improving_step = 0
+
     for epoch in range(args.start_epoch, args.epochs, ):
+        accum_train_loss = 0
+        accum_test_loss = 0
+
+        # in DistributedDataParallel training, the size of train_sampler.dataset is not equal to actual sample number
+        n_total_train_samples = 0
+        n_total_test_samples = 0
+
         # train model
         model.train()
         if args.distributed:
@@ -56,7 +63,8 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
             loss = recon_criterion(RP_recon, RP) + recon_criterion(FS_recon, FS)
             loss.backward()
             optimizer.step()
-            train_losses.append(loss.item())
+            n_total_train_samples += len(RP)
+            accum_train_loss += loss.item() * len(RP)
             align_width = len(str(len(train_loader)))
             if batch_idx % args.print_freq == 0:
                 logger.info(f'[device:{device}] train Epoch: {epoch}, '
@@ -71,24 +79,27 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
                 RP, FS = RP.to(device), FS.to(device)
                 RP_recon, __, FS_recon = model(RP, FS)
                 loss = recon_criterion(RP_recon, RP) + recon_criterion(FS_recon, FS)
-                test_losses.append(loss.item())
+                n_total_test_samples += len(RP)
+                accum_test_loss += loss.item() * len(RP)
 
-        train_loss = np.average(train_losses)
-        test_loss = np.average(test_losses)
+        train_loss = accum_train_loss / n_total_train_samples
+        test_loss = accum_test_loss / n_total_test_samples
         logger.info(f'[device:{device}] ==> ' +
                     f'avg train_loss: {train_loss:.5f}, ' +
                     f'avg test_loss: {test_loss:.5f}')
 
-        # clear lists to track next epoch
-        train_losses = []
-        test_losses = []
-
-        # early_stopping needs the testation loss to check if it has decresed,
-        # and if it has, it will make a checkpoint of the current model
-        early_stopping(test_loss, model)
-        if early_stopping.early_stop:
-            logger.info("[device:{device}] Early stopping")
-            break
+        # early stop
+        if test_loss < best_score:
+            not_improving_step = 0
+            logger.info(f'[device:{device}] * score improved from {best_score:.5f} to {test_loss:.5f}, saving model...')
+            torch.save(model.state_dict(), os.path.join(args.results_path, 'pretrained_AE.pt'))
+            best_score = test_loss
+        else:
+            not_improving_step += 1
+            if not_improving_step > args.patience:
+                logger.info(f'[device:{device}] * best score:{best_score}, not_improving_step:{not_improving_step}, early stop!')
+            else:
+                logger.info(f'[device:{device}] * best:{best_score}, not_improving_step:{not_improving_step}')
 
 
 def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss_weight=[1, 1, 1], device=None):
@@ -99,20 +110,24 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
     pedcc_criterion = nn.KLDivLoss(reduction='batchmean')
     alpha, beta, gamma = loss_weight
 
-    best_test_acc = 0
+    best_score = 0
+    not_improving_step = 0
 
     for epoch in range(args.start_epoch, args.epochs, ):
         n_train_pred_correct = 0
         n_test_pred_correct = 0
 
-        train_losses = []
-        test_losses = []
+        accum_train_loss = 0
+        accum_test_loss = 0
+
+        # in DistributedDataParallel training, the size of train_sampler.dataset is not equal to actual sample number
+        n_total_train_samples = 0
+        n_total_test_samples = 0
 
         # train model
         model.train()
         if args.distributed:
             train_sampler.set_epoch(epoch)
-        n_total_train_samples = 0  # in DistributedDataParallel training, the size of train_sampler.dataset is not equal to actual sample number
         for batch_idx, (RP, FS, true_label) in enumerate(train_loader):
             RP, FS, true_label = RP.to(device), FS.to(device), true_label.to(device)
             optimizer.zero_grad()
@@ -124,7 +139,7 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
             combine_loss = combine_loss
             combine_loss.backward()
             optimizer.step()
-            train_losses.append(combine_loss.item())
+            accum_train_loss += combine_loss.item() * len(RP)
             pred = soft_label.argmax(dim=1, keepdim=True)
             true_label = true_label.argmax(dim=1, keepdim=True)
             n_train_pred_correct += pred.eq(true_label).sum().item()
@@ -141,7 +156,6 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
 
         # eval model
         model.eval()
-        n_total_test_samples = 0
         with torch.no_grad():
             for batch_idx, (RP, FS, true_label) in enumerate(test_loader):
                 RP, FS, true_label = RP.to(device), FS.to(device), true_label.to(device)
@@ -150,14 +164,14 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
                 pedcc_classification_loss = pedcc_criterion(torch.log(soft_label), true_label)
                 FS_recon_loss = recon_criterion(FS_recon, FS)
                 combine_loss = alpha * RP_recon_loss + beta * pedcc_classification_loss + gamma * FS_recon_loss
-                test_losses.append(combine_loss.item())
+                accum_test_loss += combine_loss.item() * len(RP)
                 pred = soft_label.argmax(dim=1, keepdim=True)
                 true_label = true_label.argmax(dim=1, keepdim=True)
                 n_test_pred_correct += pred.eq(true_label).sum().item()
                 n_total_test_samples += len(RP)
 
-        train_loss = np.average(train_losses)
-        test_loss = np.average(test_losses)
+        train_loss = accum_train_loss / n_total_train_samples
+        test_loss = accum_test_loss / n_total_test_samples
         train_acc = n_train_pred_correct / n_total_train_samples
         test_acc = n_test_pred_correct / n_total_test_samples
         logger.info(f'[device:{device}] ==> ' +
@@ -166,14 +180,19 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
                     f'avg test_loss: {test_loss:.5f}, '
                     f'test_acc: {test_acc:.5f}')
 
-        # save best acc model
-        if test_acc > best_test_acc:
-            logger.info(
-                f'[device:{device}] ** test acc updated from {best_test_acc:.5f} to {test_acc:.5f}, saving model...')
+        # early stop
+        if test_acc > best_score:
+            not_improving_step = 0
+            logger.info(f'[device:{device}] * score improved from {best_score:.5f} to {test_acc:.5f}, saving model...')
             torch.save(model.state_dict(), os.path.join(args.results_path, 'Dual_CSA.pt'))
-            best_test_acc = test_acc
+            best_score = test_acc
         else:
-            logger.info(f'[device:{device}] * test acc not updated from {best_test_acc:.5f}')
+            not_improving_step += 1
+            if not_improving_step > args.patience:
+                logger.info(
+                    f'[device:{device}] * best score:{best_score}, not_improving_step:{not_improving_step}, early stop!')
+            else:
+                logger.info(f'[device:{device}] * best:{best_score}, not_improving_step:{not_improving_step}')
 
 
 def test_predict(args, model, test_loader, loss_weight=[1, 1, 1], device=None):
@@ -217,8 +236,8 @@ def show_classification_results(args, y_pred, y_true, label_names=['walk', 'bike
     cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)
     re = classification_report(y_true, y_pred, target_names=['walk', 'bike', 'bus', 'driving', 'train/subway'],
                                digits=5)
-    logger.info('confusion_matrix:\r' + str(re))
-    logger.info('classification_report:\r' + str(cm))
+    print('confusion_matrix:\r' + str(re))
+    print('classification_report:\r' + str(cm))
     with open(os.path.join(args.results_path, 'classification_results.txt'), 'w') as f:
         print(cm, file=f)
         print(re, file=f)
@@ -241,12 +260,8 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # create model
     device = 'cpu'
-    if args.pretrained:
-        # TODO：
-        pass
-    else:
-        centroid = torch.from_numpy(np.load(f'./data/{args.dataset}_features/pedcc.npy'))
-        model = Dual_CSA(args.n_channels, args.RP_emb_dim, args.FS_emb_dim, centroid)
+    centroid = torch.from_numpy(np.load(f'./data/{args.dataset}_features/pedcc.npy'))
+    model = Dual_CSA(args.n_channels, args.RP_emb_dim, args.FS_emb_dim, centroid)
     if not torch.cuda.is_available():
         logger.warning('using CPU, this will be slow')
         device = 'cpu'
@@ -301,10 +316,26 @@ def main_worker(gpu, ngpus_per_node, args):
         test_predict(args, model, test_loader, [args.alpha, args.beta, args.gamma], device)
         return
 
+    if args.pretrained:
+        # default is load Dual_CSA.pt to continue joint training Dual_CSA
+        if os.path.exists(os.path.join(args.results_path, 'Dual_CSA.pt')):
+            logger.info(f'Dual_CSA.pt exists, continue joint training from last time!')
+            model.load_state_dict(torch.load(os.path.join(args.results_path, 'Dual_CSA.pt')))
+        else:
+            model.load_state_dict(torch.load(os.path.join(args.results_path, 'pretrained_AE.pt')))
+        joint_train(args, model, train_loader, test_loader, train_sampler, [args.alpha, args.beta, args.gamma], device)
+    else:
+        if os.path.exists(os.path.join(args.results_path, 'pretrained_AE.pt')):
+            logger.info(f'pretrained_AE.pt exists, continue pretraining from last time!')
+            model.load_state_dict(torch.load(os.path.join(args.results_path, 'pretrained_AE.pt')))
+        pretrain(args, model, train_loader, test_loader, train_sampler, device)
+        # load pretrained model
+        model.load_state_dict(torch.load(os.path.join(args.results_path, 'pretrained_AE.pt')))
+        joint_train(args, model, train_loader, test_loader, train_sampler, [args.alpha, args.beta, args.gamma], device)
+
     # pretrain(args, model, train_loader, test_loader, train_sampler, device)
     # model.load_state_dict(torch.load(os.path.join(args.results_path, 'pretrained_AE.pt')))
     # model.load_state_dict(torch.load(os.path.join(args.results_path, 'Dual_CSA.pt')))
-    joint_train(args, model, train_loader, test_loader, train_sampler, [args.alpha, args.beta, args.gamma], device)
 
 
 if __name__ == '__main__':
@@ -318,10 +349,9 @@ if __name__ == '__main__':
     parser.add_argument('--n_channels', default=5, type=float)
     parser.add_argument('--no_pre', default=False, type=bool)
     parser.add_argument('--no_joint', default=False, type=bool)
-    parser.add_argument('--epoch1', default=3000, type=int)
-    parser.add_argument('--epoch2', default=3000, type=int)
     parser.add_argument('--RP_emb_dim', type=int)
     parser.add_argument('--FS_emb_dim', type=int)
+    parser.add_argument('--patience', type=int, default=15)
 
     parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
