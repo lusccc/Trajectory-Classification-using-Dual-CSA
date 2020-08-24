@@ -1,32 +1,29 @@
 import math
+import os
 import threading
 import timeit
 
+import logzero
 import numpy as np
 import tables as tb
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from logzero import logger
+logzero.logfile(os.path.join(os.environ['RES_PATH'], 'log.txt'), maxBytes=1e6, backupCount=3)
 
 import utils
 from MF_RP_mat_h5support import H5_NODE_NAME
 
 
 class Trajectory_Feature_Dataset(Dataset):
-    def __init__(self, dataset_name, data_type, ):
+    def __init__(self, dataset_name, data_type):
         self.dataset_name = dataset_name
         self.data_type = data_type
-        # self.multi_channel_RP_mats = utils.synchronized_open_file(lock,
-        #                                                           f'./data/{self.dataset_name}_features/multi_channel_RP_mats_{data_type}.h5',
-        #                                                           mode='r').get_node('/' + H5_NODE_NAME)
-        # self.multi_channel_RP_mats = tb.open_file(
-        #     f'./data/{self.dataset_name}_features/multi_channel_RP_mats_{data_type}.h5',
-        #     mode='r').get_node('/' + H5_NODE_NAME)
         self.multi_feature_segs = torch.from_numpy(
-            np.load(f'./data/{self.dataset_name}_features/multi_feature_segs_{data_type}_normalized.npy'))
+            np.load(f'./data/{self.dataset_name}_features/multi_feature_segs_{data_type}_normalized.npy')).float()
         self.labels = torch.from_numpy(
-            np.load(f'./data/{self.dataset_name}_features/multi_feature_seg_labels_{data_type}.npy'))
+            np.load(f'./data/{self.dataset_name}_features/multi_feature_seg_labels_{data_type}.npy')).float()
 
         self.transform = transforms.Compose([
             transforms.Normalize(*calc_RP_data_mean_std(dataset_name, data_type))
@@ -42,7 +39,7 @@ class Trajectory_Feature_Dataset(Dataset):
             f'./data/{self.dataset_name}_features/multi_channel_RP_mats_{self.data_type}.h5',
             mode='r')
         multi_channel_RP_mats = multi_channel_RP_mats_h5_file.get_node('/' + H5_NODE_NAME)
-        RP = self.transform(torch.from_numpy(multi_channel_RP_mats[index]))
+        RP = self.transform(torch.from_numpy(multi_channel_RP_mats[index])).float()
         label = self.labels[index]
         FS = self.multi_feature_segs[index]
         multi_channel_RP_mats_h5_file.close()
@@ -50,6 +47,7 @@ class Trajectory_Feature_Dataset(Dataset):
 
 
 def calc_RP_data_mean_std(dataset_name, data_type, use_gpu=False):
+    logger.info(f'calc_RP_data_mean_std for {dataset_name}...')
     class RP_Data(Dataset):
         def __init__(self, dataset_name, data_type):
             self.dataset_name = dataset_name

@@ -195,7 +195,7 @@ if __name__ == '__main__':
     batch_size = 600
     """ note: each autoencoder has same embedding,
      embedding will be concated to match EMB_DIM, 
-    i.e. centroids has dim EMB_DIM"""
+    i.e. centroid has dim EMB_DIM"""
     n_ae = 2  # num of ae
     each_embedding_dim = int(EMB_DIM / n_ae)
     patience = 35

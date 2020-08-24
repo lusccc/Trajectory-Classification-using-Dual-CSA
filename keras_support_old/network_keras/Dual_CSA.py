@@ -17,8 +17,8 @@ from tensorflow.python.keras.saving.save import load_model
 from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import dataset_factory
-from keras_support.network_keras import CONV2D_AE
-from keras_support.network_keras.TS_CONV2D_AE import CONV1D_AE
+from keras_support_old.network_keras import CONV2D_AE
+from keras_support_old.network_keras.TS_CONV2D_AE import CONV1D_AE
 from params import *
 from utils import visualizeData
 
@@ -387,7 +387,7 @@ if __name__ == '__main__':
 
     # """ note: each autoencoder has same embedding,
     #  embedding will be concated to match EMB_DIM,
-    # i.e. centroids has dim EMB_DIM"""
+    # i.e. centroid has dim EMB_DIM"""
     # EMB_DIM = x_centroids_train.shape[2]
     # log(f'EMB_DIM:{EMB_DIM}')
     # n_ae = 2  # num of ae

@@ -1,6 +1,10 @@
+from typing import Optional, Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from logzero import logger
+from torch import device
 from torchsummary import summary
 
 from netwok_torch.Conv1D_AE import Conv1D_AE
@@ -9,13 +13,13 @@ from netwok_torch.Conv2D_AE import Conv2D_AE
 
 class PCC_Layer(nn.Module):
 
-    def __init__(self, centroids, alpha=1.):
+    def __init__(self, centroid, alpha=1.):
         """
-        :param centroids: tensor, predefined centroids, shape: (n_class, emb_dim)
+        :param centroid: tensor, predefined centroid, shape: (n_class, emb_dim)
         """
         super(PCC_Layer, self).__init__()
         self.alpha = alpha
-        self.centroids = centroids
+        self.centroid = centroid
 
     def forward(self, emb):
         """
@@ -36,7 +40,7 @@ class PCC_Layer(nn.Module):
         :param emb: (n, emb_dim)
         """
         z = emb.unsqueeze(1)
-        u = self.centroids
+        u = self.centroid
         qij = (1. + torch.sum((z - u) ** 2, dim=2) / self.alpha) ** -1
         qij_normalize = qij.T / torch.sum(qij, dim=1)  # transpose op here for easy calc
         qij_normalize = qij_normalize.T  # transpose back
@@ -44,13 +48,18 @@ class PCC_Layer(nn.Module):
 
 
 class Dual_CSA(nn.Module):
-    def __init__(self, n_channels, RP_emb_dim, FS_emb_dim, centroids, pretrain=True):
+    def __init__(self, n_channels, RP_emb_dim, FS_emb_dim, centroid, pretrain=True):
         super(Dual_CSA, self).__init__()
         self.RP_AE = Conv2D_AE(n_channels, RP_emb_dim)
         self.FS_AE = Conv1D_AE(n_channels, FS_emb_dim)
-        self.centroids = centroids
-        self.PCC = PCC_Layer(self.centroids, 1)
+        self.centroid = centroid
+        self.PCC = PCC_Layer(self.centroid, 1)
         self.pretrain = pretrain
+
+    def cuda(self, device=None):
+        self.centroid = self.centroid.cuda(device)
+        self.PCC = PCC_Layer(self.centroid, 1)
+        return super().cuda(device)
 
     def forward(self, RP_mat, FS):
         RP_recon, RP_emb = self.RP_AE(RP_mat)
@@ -62,6 +71,7 @@ class Dual_CSA(nn.Module):
             soft_label = None
         return RP_recon, soft_label, FS_recon
 
+
 if __name__ == '__main__':
     ces = torch.tensor(
         [[1, 1, 1, 1],
@@ -72,4 +82,3 @@ if __name__ == '__main__':
     model = Dual_CSA(5, 2, 2, ces)
     print(model)
     summary(model, [(5, 184, 184), (5, 200)])
-

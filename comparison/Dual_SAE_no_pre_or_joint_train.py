@@ -211,7 +211,7 @@ if __name__ == '__main__':
     batch_size = 300
     """ note: each autoencoder has same embedding,
      embedding will be concated to match TOTAL_EMBEDDING_DIM, 
-    aka. centroids has dim TOTAL_EMBEDDING_DIM"""
+    aka. centroid has dim TOTAL_EMBEDDING_DIM"""
     n_ae = 2  # num of ae
     each_embedding_dim = int(TOTAL_EMBEDDING_DIM / n_ae)
     """no joint train here!"""

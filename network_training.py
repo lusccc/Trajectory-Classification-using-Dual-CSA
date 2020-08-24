@@ -2,10 +2,12 @@ import argparse
 import os
 import pathlib
 import random
+import sys
 
 import torch.distributed as dist
 import torch
 import torch.nn as nn
+from sklearn.metrics import classification_report, confusion_matrix
 from torch import optim
 from torch.backends import cudnn
 from torch.utils.data import DataLoader
@@ -18,82 +20,208 @@ import numpy as np
 import logzero
 from logzero import logger
 
+logzero.logfile(os.path.join(os.environ['RES_PATH'], 'log.txt'), maxBytes=1e6, backupCount=3)
+
 '''
 Some of the code about DistributedDataParallel is referenced from:
 https://github.com/pytorch/examples/tree/master/imagenet
 '''
 
 
-def combine_loss_function(RP, RP_recon, soft_label, true_label, FS, FS_recon, loss_weight=[1, 1, 1]):
-    recon_criterion = nn.MSELoss()
-    classification_criterion = nn.KLDivLoss()
-    RP_mse = recon_criterion(RP_recon, RP)
-    classification_kld = classification_criterion(torch.log(soft_label), true_label)
-    FS_mse = recon_criterion(FS_recon, FS)
-    alpha, beta, gamma = loss_weight
-    total_loss = alpha * RP_mse + beta * classification_kld + gamma * FS_mse
-    return total_loss
+def adjust_learning_rate(optimizer, epoch, args):
+    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
+    lr = args.lr * (0.1 ** (epoch // 30))
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 
-def pretrain(args, model, train_loader, test_loader, train_sampler=None):
+def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=None):
+    logger.info('pretraining...')
     model.pretrain = True
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     recon_criterion = nn.MSELoss()
     early_stopping = EarlyStopping(patience=20, verbose=True, path=os.path.join(args.results_path, 'pretrained_AE.pt'),
                                    trace_func=logger.info)
     train_losses = []
-    valid_losses = []
-    avg_train_losses = []
-    avg_valid_losses = []
+    test_losses = []
     for epoch in range(args.start_epoch, args.epochs, ):
         # train model
-        print()
         model.train()
         if args.distributed:
             train_sampler.set_epoch(epoch)
-        train_loss = 0
         for batch_idx, (RP, FS, _) in enumerate(train_loader):
+            RP, FS = RP.to(device), FS.to(device)
             optimizer.zero_grad()
-            RP, FS = RP.float().cuda(), FS.float().cuda()
             RP_recon, __, FS_recon = model(RP, FS)
             loss = recon_criterion(RP_recon, RP) + recon_criterion(FS_recon, FS)
             loss.backward()
-            train_loss += loss.item()
-            train_losses.append(loss.item())
             optimizer.step()
+            train_losses.append(loss.item())
+            align_width = len(str(len(train_loader)))
             if batch_idx % args.print_freq == 0:
-                logger.info(f'Train Epoch: {epoch}, '
-                            f'[{batch_idx * len(RP):>{len(str(args.epochs))}}'
-                            f'/{len(train_loader.dataset):>{len(str(args.epochs))}} '
-                            f'({100. * batch_idx / len(train_loader):2.0f}%)]'
+                logger.info(f'[device:{device}] train Epoch: {epoch}, '
+                            f'[{batch_idx:>{align_width}}'
+                            f'/{len(train_loader):>{align_width}}], '
                             f'\tLoss: {loss.item():.6f}')
 
-        # valid model
+        # eval model
         model.eval()
-        for RP, FS, _ in test_loader:
-            RP, FS = RP.float().cuda(), FS.float().cuda()
-            RP_recon, __, FS_recon = model(RP, FS)
-            loss = recon_criterion(RP_recon, RP) + recon_criterion(FS_recon, FS)
-            valid_losses.append(loss.item())
+        with torch.no_grad():
+            for RP, FS, _ in test_loader:
+                RP, FS = RP.to(device), FS.to(device)
+                RP_recon, __, FS_recon = model(RP, FS)
+                loss = recon_criterion(RP_recon, RP) + recon_criterion(FS_recon, FS)
+                test_losses.append(loss.item())
 
         train_loss = np.average(train_losses)
-        valid_loss = np.average(valid_losses)
-        avg_train_losses.append(train_loss)
-        avg_valid_losses.append(valid_loss)
-        logger.info(f'==> ' +
+        test_loss = np.average(test_losses)
+        logger.info(f'[device:{device}] ==> ' +
                     f'avg train_loss: {train_loss:.5f}, ' +
-                    f'avg valid_loss: {valid_loss:.5f}')
+                    f'avg test_loss: {test_loss:.5f}')
 
         # clear lists to track next epoch
         train_losses = []
-        valid_losses = []
+        test_losses = []
 
-        # early_stopping needs the validation loss to check if it has decresed,
+        # early_stopping needs the testation loss to check if it has decresed,
         # and if it has, it will make a checkpoint of the current model
-        early_stopping(valid_loss, model)
+        early_stopping(test_loss, model)
         if early_stopping.early_stop:
-            logger.info("Early stopping")
+            logger.info("[device:{device}] Early stopping")
             break
+
+
+def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss_weight=[1, 1, 1], device=None):
+    logger.info('joint training...')
+    model.module.pretrain = False
+    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.weight_decay)  # weight_decay added
+    recon_criterion = nn.MSELoss()
+    pedcc_criterion = nn.KLDivLoss(reduction='batchmean')
+    alpha, beta, gamma = loss_weight
+
+    best_test_acc = 0
+
+    for epoch in range(args.start_epoch, args.epochs, ):
+        n_train_pred_correct = 0
+        n_test_pred_correct = 0
+
+        train_losses = []
+        test_losses = []
+
+        # train model
+        model.train()
+        if args.distributed:
+            train_sampler.set_epoch(epoch)
+        n_total_train_samples = 0  # in DistributedDataParallel training, the size of train_sampler.dataset is not equal to actual sample number
+        for batch_idx, (RP, FS, true_label) in enumerate(train_loader):
+            RP, FS, true_label = RP.to(device), FS.to(device), true_label.to(device)
+            optimizer.zero_grad()
+            RP_recon, soft_label, FS_recon = model(RP, FS)
+            RP_recon_loss = recon_criterion(RP_recon, RP)
+            pedcc_classification_loss = pedcc_criterion(torch.log(soft_label).float(), true_label)
+            FS_recon_loss = recon_criterion(FS_recon, FS)
+            combine_loss = alpha * RP_recon_loss + beta * pedcc_classification_loss + gamma * FS_recon_loss
+            combine_loss = combine_loss
+            combine_loss.backward()
+            optimizer.step()
+            train_losses.append(combine_loss.item())
+            pred = soft_label.argmax(dim=1, keepdim=True)
+            true_label = true_label.argmax(dim=1, keepdim=True)
+            n_train_pred_correct += pred.eq(true_label).sum().item()
+            n_total_train_samples += len(RP)
+            align_width = len(str(len(train_loader)))
+            if batch_idx % args.print_freq == 0:
+                logger.info(f'[device:{device}] train Epoch: {epoch}, '
+                            f'[{batch_idx:>{align_width}} '
+                            f'/{len(train_loader):>{align_width}}], '
+                            f'RP_recon_loss: {RP_recon_loss.item():.6f}, '
+                            f'pedcc_classification_loss: {pedcc_classification_loss.item():.6f}, '
+                            f'FS_recon_loss: {FS_recon_loss.item():.6f},'
+                            f'combine_loss: {combine_loss.item():.6f}')
+
+        # eval model
+        model.eval()
+        n_total_test_samples = 0
+        with torch.no_grad():
+            for batch_idx, (RP, FS, true_label) in enumerate(test_loader):
+                RP, FS, true_label = RP.to(device), FS.to(device), true_label.to(device)
+                RP_recon, soft_label, FS_recon = model(RP, FS)
+                RP_recon_loss = recon_criterion(RP_recon, RP)
+                pedcc_classification_loss = pedcc_criterion(torch.log(soft_label), true_label)
+                FS_recon_loss = recon_criterion(FS_recon, FS)
+                combine_loss = alpha * RP_recon_loss + beta * pedcc_classification_loss + gamma * FS_recon_loss
+                test_losses.append(combine_loss.item())
+                pred = soft_label.argmax(dim=1, keepdim=True)
+                true_label = true_label.argmax(dim=1, keepdim=True)
+                n_test_pred_correct += pred.eq(true_label).sum().item()
+                n_total_test_samples += len(RP)
+
+        train_loss = np.average(train_losses)
+        test_loss = np.average(test_losses)
+        train_acc = n_train_pred_correct / n_total_train_samples
+        test_acc = n_test_pred_correct / n_total_test_samples
+        logger.info(f'[device:{device}] ==> ' +
+                    f'avg train_loss: {train_loss:.5f}, '
+                    f'train acc: {train_acc:.5f}, '
+                    f'avg test_loss: {test_loss:.5f}, '
+                    f'test_acc: {test_acc:.5f}')
+
+        # save best acc model
+        if test_acc > best_test_acc:
+            logger.info(
+                f'[device:{device}] ** test acc updated from {best_test_acc:.5f} to {test_acc:.5f}, saving model...')
+            torch.save(model.state_dict(), os.path.join(args.results_path, 'Dual_CSA.pt'))
+            best_test_acc = test_acc
+        else:
+            logger.info(f'[device:{device}] * test acc not updated from {best_test_acc:.5f}')
+
+
+def test_predict(args, model, test_loader, loss_weight=[1, 1, 1], device=None):
+    logger.info('test_predict...')
+    model.eval()
+    model.module.pretrain = False
+    total_n_corrects = 0
+    with torch.no_grad():
+        alpha, beta, gamma = loss_weight
+        recon_criterion = nn.MSELoss()
+        pedcc_criterion = nn.KLDivLoss(reduction='batchmean')
+        test_losses = []
+        pred_labels = []
+        true_labels = []
+        for batch_idx, (RP, FS, true_label) in enumerate(test_loader):
+            RP, FS, true_label = RP.to(device), FS.to(device), true_label.to(device)
+            RP_recon, soft_label, FS_recon = model(RP, FS)
+            RP_recon_loss = recon_criterion(RP_recon, RP)
+            pedcc_classification_loss = pedcc_criterion(torch.log(soft_label), true_label)
+            FS_recon_loss = recon_criterion(FS_recon, FS)
+            total_loss = alpha * RP_recon_loss + beta * pedcc_classification_loss + gamma * FS_recon_loss
+            test_losses.append(total_loss.item())
+            pred = soft_label.argmax(dim=1, keepdim=True)
+            pred_labels.extend(pred.tolist())
+            true_label = true_label.argmax(dim=1, keepdim=True)
+            true_labels.extend(true_label.tolist())
+            n_corrects = pred.eq(true_label).sum().item()
+            total_n_corrects += n_corrects
+
+        test_loss = np.average(test_losses)
+        test_acc = total_n_corrects / len(test_loader.dataset)
+        logger.info(f'[device:{device}] ==> ' +
+                    f'avg test_loss: {test_loss:.5f}, '
+                    f'test_acc: {test_acc:.5f}')
+        logger.info(f'?!{total_n_corrects / len(test_loader.dataset)}')
+        show_classification_results(args, pred_labels, true_labels)
+
+
+def show_classification_results(args, y_pred, y_true, label_names=['walk', 'bike', 'bus', 'driving', 'train/subway']):
+    logger.info('show_classification_results:')
+    cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)
+    re = classification_report(y_true, y_pred, target_names=['walk', 'bike', 'bus', 'driving', 'train/subway'],
+                               digits=5)
+    logger.info('confusion_matrix:\r' + str(re))
+    logger.info('classification_report:\r' + str(cm))
+    with open(os.path.join(args.results_path, 'classification_results.txt'), 'w') as f:
+        print(cm, file=f)
+        print(re, file=f)
 
 
 def main_worker(gpu, ngpus_per_node, args):
@@ -112,14 +240,16 @@ def main_worker(gpu, ngpus_per_node, args):
                                 world_size=args.world_size, rank=args.rank)
 
     # create model
-    centroid = torch.from_numpy(np.load(f'./data/{args.dataset}_features/pedcc.npy'))
+    device = 'cpu'
     if args.pretrained:
         # TODO：
         pass
     else:
+        centroid = torch.from_numpy(np.load(f'./data/{args.dataset}_features/pedcc.npy'))
         model = Dual_CSA(args.n_channels, args.RP_emb_dim, args.FS_emb_dim, centroid)
     if not torch.cuda.is_available():
         logger.warning('using CPU, this will be slow')
+        device = 'cpu'
     elif args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
         # should always set the single device scope, otherwise,
@@ -127,6 +257,7 @@ def main_worker(gpu, ngpus_per_node, args):
         if args.gpu is not None:
             torch.cuda.set_device(args.gpu)
             model.cuda(args.gpu)
+            device = f'cuda:{args.gpu}'
             # When using a single GPU per process and per
             # DistributedDataParallel, we need to divide the batch size
             # ourselves based on the total number of GPUs we have
@@ -138,12 +269,18 @@ def main_worker(gpu, ngpus_per_node, args):
             # DistributedDataParallel will divide and allocate batch_size to all
             # available GPUs if device_ids are not set
             model = torch.nn.parallel.DistributedDataParallel(model)
+            device = f'cuda'
+
     elif args.gpu is not None:
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
+        device = f'cuda:{args.gpu}'
     else:
         # DataParallel will divide and allocate batch_size to all available GPUs
+        model.centroid.cuda()
         model = torch.nn.DataParallel(model).cuda()
+        device = f'cuda'
+    logger.info(f'device: {device}')
 
     # loading data
     train_dataset = dataset_factory.Trajectory_Feature_Dataset(args.dataset, 'train', )
@@ -153,16 +290,21 @@ def main_worker(gpu, ngpus_per_node, args):
         train_sampler = None
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        num_workers=args.workers, sampler=train_sampler, pin_memory=True)
     test_loader = DataLoader(dataset_factory.Trajectory_Feature_Dataset(args.dataset, 'test', ),
                              batch_size=args.batch_size,
                              shuffle=False, num_workers=args.workers, pin_memory=True)
 
+    cudnn.benchmark = True
     if args.evaluate:
-        # TODO：
+        model.load_state_dict(torch.load(os.path.join(args.results_path, 'Dual_CSA.pt')))
+        test_predict(args, model, test_loader, [args.alpha, args.beta, args.gamma], device)
         return
 
-    pretrain(args, model, train_loader, test_loader, train_sampler)
+    # pretrain(args, model, train_loader, test_loader, train_sampler, device)
+    # model.load_state_dict(torch.load(os.path.join(args.results_path, 'pretrained_AE.pt')))
+    # model.load_state_dict(torch.load(os.path.join(args.results_path, 'Dual_CSA.pt')))
+    joint_train(args, model, train_loader, test_loader, train_sampler, [args.alpha, args.beta, args.gamma], device)
 
 
 if __name__ == '__main__':
@@ -204,7 +346,7 @@ if __name__ == '__main__':
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
-                        help='evaluate model on validation set')
+                        help='evaluate model on testation set')
     parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                         help='use pre-trained model')
     parser.add_argument('--world-size', default=-1, type=int,
@@ -226,11 +368,9 @@ if __name__ == '__main__':
                              'multi node data parallel training')
 
     args = parser.parse_args()
+    os.environ['RES_PATH'] = args.results_path
     pathlib.Path(os.path.join(args.results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
-    logzero.logfile(os.path.join(args.results_path, 'log.txt'), maxBytes=1e6, backupCount=3)
-    logger.info(
-        f'dataset_name:{args.dataset}, results_path:{args.results_path} , loss weight:{args.alpha},{args.beta},{args.gamma},'
-        f'RP_emb_dim:{args.RP_emb_dim}, ts_emb_dim:{args.FS_emb_dim}, no_pretrain:{args.no_pre}, no_joint_train:{args.no_pre}')
+    logger.info('params: ' + str(args))
 
     # write params to args
     if args.seed is not None:

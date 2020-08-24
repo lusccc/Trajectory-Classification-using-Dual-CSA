@@ -64,7 +64,7 @@ class PEDDC(object):
 
     def repeat(self, c, n, scale=True):
         """
-        centroids repeat n time to form a list
+        centroid repeat n time to form a list
         """
         cs = np.array([c for i in range(n)])  # !!!!full of same element
         if scale:
@@ -102,6 +102,6 @@ if __name__ == '__main__':
     # features = np.load(features_path)
     # n = features.shape[0]
     # # !!those data are generated, no real trajectory data involved!!
-    # centroids = pedcc.repeat(c, n, scale)
+    # centroid = pedcc.repeat(c, n, scale)
     # print('saving repeated pedcc')
-    # np.save(f'{save_dir}/centroids_{data_type}.npy', centroids)
+    # np.save(f'{save_dir}/centroids_{data_type}.npy', centroid)
