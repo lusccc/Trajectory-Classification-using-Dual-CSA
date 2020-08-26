@@ -207,3 +207,5 @@ tb_filters = tb.Filters(complevel=5, complib='blosc')
 def to_categorical(y, num_classes):
     """ 1-hot encodes a tensor """
     return np.eye(num_classes, dtype='uint8')[y]
+
+

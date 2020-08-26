@@ -3,6 +3,7 @@ import os
 import pathlib
 import random
 import sys
+import timeit
 from math import inf
 
 import torch.distributed as dist
@@ -20,12 +21,41 @@ import numpy as np
 import logzero
 from logzero import logger
 
-logzero.logfile(os.path.join(os.environ['RES_PATH'], 'log.txt'), maxBytes=1e6, backupCount=3)
+logzero.logfile(os.path.join(os.environ['RES_PATH'], 'log.txt'), backupCount=3)
 
 '''
 Some of the code about DistributedDataParallel is referenced from:
 https://github.com/pytorch/examples/tree/master/imagenet
 '''
+
+
+def get_log_str(args, str):
+    return f'[node:{args.node} rank:{args.rank}] {str}'
+
+
+def try_to_save_model(args, model, path):
+    # this condition statement means only save model on first gpu (rank=0),
+    # to avoid save multiple time and cause parallel writing/reading issue
+    if not args.no_save_model and (not args.multiprocessing_distributed or (args.multiprocessing_distributed
+                                                                            and args.rank % args.ngpus_per_node == 0)):
+        logger.info(get_log_str(args, f'using node {args.node} rank {args.rank} to save model, path: {path}'))
+        torch.save(model.state_dict(), path)
+
+    # Use a barrier() to make sure that other process loads the model after process
+    # 0 saves it.
+    # https://stackoverflow.com/questions/59760328/how-does-torch-distributed-barrier-work
+    dist.barrier()
+
+
+def load_saved_model(args, path, model):
+    logger.info(get_log_str(args, f'loading saved model on gpu: {args.gpu}, path: {path}'))
+    if args.gpu is None:
+        model.load_state_dict(torch.load(path))
+    else:
+        # Map model to be loaded to specified single gpu.
+        loc = 'cuda:{}'.format(args.gpu)
+        model.load_state_dict(torch.load(path, map_location=loc))
+    return model
 
 
 def adjust_learning_rate(optimizer, epoch, args):
@@ -36,7 +66,8 @@ def adjust_learning_rate(optimizer, epoch, args):
 
 
 def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=None):
-    logger.info('pretraining...')
+    logger.info(get_log_str(args, 'pretraining...'))
+    pretrain_start = timeit.time.perf_counter()
     model.pretrain = True
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     recon_criterion = nn.MSELoss()
@@ -45,6 +76,8 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
     not_improving_step = 0
 
     for epoch in range(args.start_epoch, args.epochs, ):
+        epoch_start = timeit.time.perf_counter()
+
         accum_train_loss = 0
         accum_test_loss = 0
 
@@ -57,6 +90,7 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
         if args.distributed:
             train_sampler.set_epoch(epoch)
         for batch_idx, (RP, FS, _) in enumerate(train_loader):
+            batch_start = timeit.time.perf_counter()
             RP, FS = RP.to(device), FS.to(device)
             optimizer.zero_grad()
             RP_recon, __, FS_recon = model(RP, FS)
@@ -66,11 +100,12 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
             n_total_train_samples += len(RP)
             accum_train_loss += loss.item() * len(RP)
             align_width = len(str(len(train_loader)))
-            if batch_idx % args.print_freq == 0:
-                logger.info(f'[device:{device}] train Epoch: {epoch}, '
-                            f'[{batch_idx:>{align_width}}'
-                            f'/{len(train_loader):>{align_width}}], '
-                            f'\tLoss: {loss.item():.6f}')
+            if batch_idx % args.print_freq == 0 or batch_idx == len(train_loader) - 1:
+                logger.info(get_log_str(args, f'Train Epoch: {epoch}, '
+                                              f'[{batch_idx + 1:>{align_width}}'
+                                              f'/{len(train_loader):>{align_width}}], '
+                                              f'Loss: {loss.item():.6f}, '
+                                              f'batch time: {timeit.time.perf_counter() - batch_start:.2f}s'))
 
         # eval model
         model.eval()
@@ -84,26 +119,34 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
 
         train_loss = accum_train_loss / n_total_train_samples
         test_loss = accum_test_loss / n_total_test_samples
-        logger.info(f'[device:{device}] ==> ' +
-                    f'avg train_loss: {train_loss:.5f}, ' +
-                    f'avg test_loss: {test_loss:.5f}')
+        logger.info(get_log_str(args, f'==> ' +
+                                f'avg train_loss: {train_loss:.5f}, ' +
+                                f'avg test_loss: {test_loss:.5f}, '
+                                f'epoch time: {timeit.time.perf_counter() - epoch_start:.2f}s'))
 
         # early stop
         if test_loss < best_score:
             not_improving_step = 0
-            logger.info(f'[device:{device}] * score improved from {best_score:.5f} to {test_loss:.5f}, saving model...')
-            torch.save(model.state_dict(), os.path.join(args.results_path, 'pretrained_AE.pt'))
+            logger.info(get_log_str(args, f'★ SCORE IMPROVED FROM {best_score:.5f} TO {test_loss:.5f}'))
+            try_to_save_model(args, model, os.path.join(args.results_path, 'pretrained_AE.pt'))
             best_score = test_loss
         else:
             not_improving_step += 1
             if not_improving_step > args.patience:
-                logger.info(f'[device:{device}] * best score:{best_score}, not_improving_step:{not_improving_step}, early stop!')
+                logger.info(
+                    get_log_str(args,
+                                f'* best score: {best_score}, NOT IMPROVING STEP:{not_improving_step}, EARLY STOP!'))
+                break
             else:
-                logger.info(f'[device:{device}] * best:{best_score}, not_improving_step:{not_improving_step}')
+                logger.info(get_log_str(args, f'* best: {best_score}, NOT IMPROVING STEP: {not_improving_step}'))
+    logger.info(
+        get_log_str(args,
+                    f'END PRETRAIN ON NODE {args.node}, RANK: {args.rank}, TIME: {timeit.time.perf_counter() - pretrain_start:.2f}s'))
 
 
 def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss_weight=[1, 1, 1], device=None):
-    logger.info('joint training...')
+    logger.info(get_log_str(args, 'joint training...'))
+    joint_train_start = timeit.time.perf_counter()
     model.module.pretrain = False
     optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.weight_decay)  # weight_decay added
     recon_criterion = nn.MSELoss()
@@ -114,6 +157,8 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
     not_improving_step = 0
 
     for epoch in range(args.start_epoch, args.epochs, ):
+        epoch_start = timeit.time.perf_counter()
+
         n_train_pred_correct = 0
         n_test_pred_correct = 0
 
@@ -129,6 +174,7 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
         if args.distributed:
             train_sampler.set_epoch(epoch)
         for batch_idx, (RP, FS, true_label) in enumerate(train_loader):
+            batch_start = timeit.time.perf_counter()
             RP, FS, true_label = RP.to(device), FS.to(device), true_label.to(device)
             optimizer.zero_grad()
             RP_recon, soft_label, FS_recon = model(RP, FS)
@@ -145,14 +191,15 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
             n_train_pred_correct += pred.eq(true_label).sum().item()
             n_total_train_samples += len(RP)
             align_width = len(str(len(train_loader)))
-            if batch_idx % args.print_freq == 0:
-                logger.info(f'[device:{device}] train Epoch: {epoch}, '
-                            f'[{batch_idx:>{align_width}} '
-                            f'/{len(train_loader):>{align_width}}], '
-                            f'RP_recon_loss: {RP_recon_loss.item():.6f}, '
-                            f'pedcc_classification_loss: {pedcc_classification_loss.item():.6f}, '
-                            f'FS_recon_loss: {FS_recon_loss.item():.6f},'
-                            f'combine_loss: {combine_loss.item():.6f}')
+            if batch_idx % args.print_freq == 0 or batch_idx == len(train_loader) - 1:
+                logger.info(get_log_str(args, f'Train Epoch: {epoch}, '
+                                              f'[{batch_idx + 1:>{align_width}} '
+                                              f'/{len(train_loader):>{align_width}}], '
+                                              f'RP_recon_loss: {RP_recon_loss.item():.6f}, '
+                                              f'pedcc_classification_loss: {pedcc_classification_loss.item():.6f}, '
+                                              f'FS_recon_loss: {FS_recon_loss.item():.6f}, '
+                                              f'combine_loss: {combine_loss.item():.6f}, '
+                                              f'batch time: {timeit.time.perf_counter() - batch_start:.2f}s'))
 
         # eval model
         model.eval()
@@ -174,29 +221,37 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
         test_loss = accum_test_loss / n_total_test_samples
         train_acc = n_train_pred_correct / n_total_train_samples
         test_acc = n_test_pred_correct / n_total_test_samples
-        logger.info(f'[device:{device}] ==> ' +
-                    f'avg train_loss: {train_loss:.5f}, '
-                    f'train acc: {train_acc:.5f}, '
-                    f'avg test_loss: {test_loss:.5f}, '
-                    f'test_acc: {test_acc:.5f}')
+        logger.info(get_log_str(args, f'==> ' +
+                                f'avg train_loss: {train_loss:.5f}, '
+                                f'train acc: {train_acc:.5f}, '
+                                f'avg test_loss: {test_loss:.5f}, '
+                                f'test_acc: {test_acc:.5f}, '
+                                f'epoch time: {timeit.time.perf_counter() - epoch_start:.2f}s'))
 
         # early stop
         if test_acc > best_score:
             not_improving_step = 0
-            logger.info(f'[device:{device}] * score improved from {best_score:.5f} to {test_acc:.5f}, saving model...')
-            torch.save(model.state_dict(), os.path.join(args.results_path, 'Dual_CSA.pt'))
+            logger.info(get_log_str(args, f'★ SCORE IMPROVED FROM {best_score:.5f} TO {test_acc:.5f}'))
+            try_to_save_model(args, model, os.path.join(args.results_path, 'Dual_CSA.pt'))
             best_score = test_acc
         else:
             not_improving_step += 1
             if not_improving_step > args.patience:
                 logger.info(
-                    f'[device:{device}] * best score:{best_score}, not_improving_step:{not_improving_step}, early stop!')
+                    get_log_str(args,
+                                f'* best score: {best_score}, NOT IMPROVING STEP: {not_improving_step}, EARLY STOP!'))
+                break
             else:
-                logger.info(f'[device:{device}] * best:{best_score}, not_improving_step:{not_improving_step}')
+                logger.info(get_log_str(args, f'* best: {best_score}, NOT IMPROVING STEP: {not_improving_step}'))
+    logger.info(
+        get_log_str(args,
+                    f'END JOINT TRAIN ON NODE {args.node}, RANK: {args.rank}, TIME: {timeit.time.perf_counter() - joint_train_start:.2f}s'))
 
 
 def test_predict(args, model, test_loader, loss_weight=[1, 1, 1], device=None):
-    logger.info('test_predict...')
+    logger.info(get_log_str(args, 'test_predict...'))
+    predict_start = timeit.time.perf_counter()
+    torch.cuda.empty_cache()
     model.eval()
     model.module.pretrain = False
     total_n_corrects = 0
@@ -224,37 +279,56 @@ def test_predict(args, model, test_loader, loss_weight=[1, 1, 1], device=None):
 
         test_loss = np.average(test_losses)
         test_acc = total_n_corrects / len(test_loader.dataset)
-        logger.info(f'[device:{device}] ==> ' +
-                    f'avg test_loss: {test_loss:.5f}, '
-                    f'test_acc: {test_acc:.5f}')
-        logger.info(f'?!{total_n_corrects / len(test_loader.dataset)}')
+        logger.info(get_log_str(args, f'==> ' +
+                                f'avg test_loss: {test_loss:.5f}, '
+                                f'test_acc: {test_acc:.5f}'))
+        logger.info(
+            get_log_str(args,
+                        f'END TEST PREDICT ON NODE {args.node}, RANK: {args.rank}, TIME: {timeit.time.perf_counter() - predict_start:.2f}s'))
+
         show_classification_results(args, pred_labels, true_labels)
 
 
 def show_classification_results(args, y_pred, y_true, label_names=['walk', 'bike', 'bus', 'driving', 'train/subway']):
-    logger.info('show_classification_results:')
-    cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)
-    re = classification_report(y_true, y_pred, target_names=['walk', 'bike', 'bus', 'driving', 'train/subway'],
-                               digits=5)
-    print('confusion_matrix:\r' + str(re))
-    print('classification_report:\r' + str(cm))
-    with open(os.path.join(args.results_path, 'classification_results.txt'), 'w') as f:
-        print(cm, file=f)
-        print(re, file=f)
+    if not args.multiprocessing_distributed or (args.multiprocessing_distributed
+                                                and args.rank % args.ngpus_per_node == 0):
+        logger.info(get_log_str(args, 'show_classification_results:'))
+        cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)
+        re = classification_report(y_true, y_pred, target_names=['walk', 'bike', 'bus', 'driving', 'train/subway'],
+                                   digits=5)
+        logger.info(get_log_str(args, f'confusion_matrix:\n{str(cm)}'))
+        # logger.info(get_log_str(args, str(cm)))
+        logger.info(get_log_str(args, f'classification_report:\n{str(re)}'))
+        # logger.info(get_log_str(args, str(re)))
+        with open(os.path.join(args.results_path, 'classification_results.txt'), 'w') as f:
+            print(cm, file=f)
+            print(re, file=f)
 
 
-def main_worker(gpu, ngpus_per_node, args):
+def main_worker(proc, ngpus_per_node, args):
+    # note: here args.rank is not adjusted to the global rank among all the processes yet,
+    # it represents the machine/node id.
+    node = args.rank
+    args.node = node
+    logger.info(get_log_str(args, f'********THIS IS NODE {node}, PROCESS {proc}********'))
+    logger.info(get_log_str(args, f'entering main_worker, process: {proc}, pid: {os.getpid()}'))
+    gpu = proc  # process id, i.e., gpu
+
     # init distributed data parallel
     args.gpu = gpu
     if args.gpu is not None:
-        logger.info("Use GPU: {} for training".format(args.gpu))
+        logger.info(get_log_str(args, f"Node: {node}: use GPU: {args.gpu} for training"))
     if args.distributed:
         if args.dist_url == "env://" and args.rank == -1:
             args.rank = int(os.environ["RANK"])
         if args.multiprocessing_distributed:
-            # For multiprocessing distributed training, rank needs to be the
-            # global rank among all the processes
+            # ADJUST RANK! For multiprocessing distributed training, rank needs to be the
+            # global rank among [ALL THE PROCESSES]
             args.rank = args.rank * ngpus_per_node + gpu
+        logger.info(
+            get_log_str(args,
+                        f'Node: {node}: init_process_group, world_size: {args.world_size}, rank among ALL THE PROCESSES: {args.rank}'))
+        # now here world_size means global process number, rank is the ID of current process
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
 
@@ -263,13 +337,14 @@ def main_worker(gpu, ngpus_per_node, args):
     centroid = torch.from_numpy(np.load(f'./data/{args.dataset}_features/pedcc.npy'))
     model = Dual_CSA(args.n_channels, args.RP_emb_dim, args.FS_emb_dim, centroid)
     if not torch.cuda.is_available():
-        logger.warning('using CPU, this will be slow')
+        logger.warning(get_log_str(args, 'using CPU, this will be slow'))
         device = 'cpu'
     elif args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
         # should always set the single device scope, otherwise,
         # DistributedDataParallel will use all available devices.
         if args.gpu is not None:
+            logger.info(get_log_str(args, f'set_device: {args.gpu}'))
             torch.cuda.set_device(args.gpu)
             model.cuda(args.gpu)
             device = f'cuda:{args.gpu}'
@@ -288,14 +363,13 @@ def main_worker(gpu, ngpus_per_node, args):
 
     elif args.gpu is not None:
         torch.cuda.set_device(args.gpu)
-        model = model.cuda(args.gpu)
+        model.cuda(args.gpu)
         device = f'cuda:{args.gpu}'
     else:
         # DataParallel will divide and allocate batch_size to all available GPUs
-        model.centroid.cuda()
         model = torch.nn.DataParallel(model).cuda()
         device = f'cuda'
-    logger.info(f'device: {device}')
+    logger.info(get_log_str(args, f'device: {device}'))
 
     # loading data
     train_dataset = dataset_factory.Trajectory_Feature_Dataset(args.dataset, 'train', )
@@ -310,48 +384,56 @@ def main_worker(gpu, ngpus_per_node, args):
                              batch_size=args.batch_size,
                              shuffle=False, num_workers=args.workers, pin_memory=True)
 
+    # start training or evaluating
     cudnn.benchmark = True
     if args.evaluate:
-        model.load_state_dict(torch.load(os.path.join(args.results_path, 'Dual_CSA.pt')))
+        model = load_saved_model(args, os.path.join(args.results_path, 'Dual_CSA.pt'), model)
         test_predict(args, model, test_loader, [args.alpha, args.beta, args.gamma], device)
         return
 
     if args.pretrained:
-        # default is load Dual_CSA.pt to continue joint training Dual_CSA
+        # if pretrained, carry on joint training.
+        # here we also load Dual_CSA.pt to continue joint training Dual_CSA (if existed)
         if os.path.exists(os.path.join(args.results_path, 'Dual_CSA.pt')):
-            logger.info(f'Dual_CSA.pt exists, continue joint training from last time!')
-            model.load_state_dict(torch.load(os.path.join(args.results_path, 'Dual_CSA.pt')))
+            logger.info(get_log_str(args, f'Dual_CSA.pt exists, continue joint training from last time!'))
+            model = load_saved_model(args, os.path.join(args.results_path, 'Dual_CSA.pt'), model)
         else:
-            model.load_state_dict(torch.load(os.path.join(args.results_path, 'pretrained_AE.pt')))
+            # load best pretrained model to joint train
+            model = load_saved_model(args, os.path.join(args.results_path, 'pretrained_AE.pt'), model)
         joint_train(args, model, train_loader, test_loader, train_sampler, [args.alpha, args.beta, args.gamma], device)
     else:
+        # not pretrained, carry on pretrain and joint training in order.
+        # here we also load pretrained_AE.pt to continue pretraining (if existed)
         if os.path.exists(os.path.join(args.results_path, 'pretrained_AE.pt')):
-            logger.info(f'pretrained_AE.pt exists, continue pretraining from last time!')
-            model.load_state_dict(torch.load(os.path.join(args.results_path, 'pretrained_AE.pt')))
+            logger.info(get_log_str(args, f'pretrained_AE.pt exists, continue pretraining from last time!'))
+            model = load_saved_model(args, os.path.join(args.results_path, 'pretrained_AE.pt'), model)
         pretrain(args, model, train_loader, test_loader, train_sampler, device)
-        # load pretrained model
-        model.load_state_dict(torch.load(os.path.join(args.results_path, 'pretrained_AE.pt')))
-        joint_train(args, model, train_loader, test_loader, train_sampler, [args.alpha, args.beta, args.gamma], device)
-
-    # pretrain(args, model, train_loader, test_loader, train_sampler, device)
-    # model.load_state_dict(torch.load(os.path.join(args.results_path, 'pretrained_AE.pt')))
-    # model.load_state_dict(torch.load(os.path.join(args.results_path, 'Dual_CSA.pt')))
+        # load best pretrained model to joint train
+        model = load_saved_model(args, os.path.join(args.results_path, 'pretrained_AE.pt'), model)
+        if not args.only_pre:
+            joint_train(args, model, train_loader, test_loader, train_sampler, [args.alpha, args.beta, args.gamma],
+                        device)
+    if not args.only_pre:
+        # load best Dual_CSA model to predict
+        model = load_saved_model(args, os.path.join(args.results_path, 'Dual_CSA.pt'), model)
+        test_predict(args, model, test_loader, [args.alpha, args.beta, args.gamma], device)
 
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser(description='DCSA_Training')
     parser.add_argument('--dataset', type=str, required=True)
-    parser.add_argument('--results_path', default='./results/default', type=str)
+    parser.add_argument('--results-path', default='./results/default', type=str)
     parser.add_argument('--alpha', default=ALPHA, type=float)
     parser.add_argument('--beta', default=BETA, type=float)
     parser.add_argument('--gamma', default=GAMMA, type=float)
-    parser.add_argument('--n_channels', default=5, type=float)
-    parser.add_argument('--no_pre', default=False, type=bool)
-    parser.add_argument('--no_joint', default=False, type=bool)
-    parser.add_argument('--RP_emb_dim', type=int)
-    parser.add_argument('--FS_emb_dim', type=int)
+    parser.add_argument('--n-channels', default=5, type=float)
+    parser.add_argument('--RP-emb-dim', type=int)
+    parser.add_argument('--FS-emb-dim', type=int)
     parser.add_argument('--patience', type=int, default=15)
+    parser.add_argument('--no-pre', action='store_true')
+    parser.add_argument('--no-joint', action='store_true')
+    parser.add_argument('--only-pre', action='store_true')
+    parser.add_argument('--no-save-model', action='store_true')
 
     parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
@@ -371,8 +453,8 @@ if __name__ == '__main__':
     parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)',
                         dest='weight_decay')
-    parser.add_argument('-p', '--print-freq', default=10, type=int,
-                        metavar='N', help='print frequency (default: 10)')
+    parser.add_argument('-p', '--print-freq', default=4, type=int,
+                        metavar='N', help='print frequency (default: 4)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
@@ -396,11 +478,10 @@ if __name__ == '__main__':
                              'N processes per node, which has N GPUs. This is the '
                              'fastest way to use PyTorch for either single node or '
                              'multi node data parallel training')
-
     args = parser.parse_args()
     os.environ['RES_PATH'] = args.results_path
     pathlib.Path(os.path.join(args.results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
-    logger.info('params: ' + str(args))
+    logger.info('args: ' + str(args))
 
     # write params to args
     if args.seed is not None:
@@ -421,15 +502,19 @@ if __name__ == '__main__':
         args.world_size = int(os.environ["WORLD_SIZE"])
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
-    ngpus_per_node = torch.cuda.device_count()
+    ngpus_per_node = torch.cuda.device_count()  # gpu number of CURRENT MACHINE (this node)
 
     if args.multiprocessing_distributed:
-        # Since we have ngpus_per_node processes per node, the total world_size
+        # Since we have ngpus_per_node processes per node, the TOTAL WORLD_SIZE
         # needs to be adjusted accordingly
         args.world_size = ngpus_per_node * args.world_size
+        args.ngpus_per_node = ngpus_per_node
+        logger.info(f'ngpus_per_node: {ngpus_per_node}, ACTUAL world_size: {args.world_size}')
+        logger.info(f'updated args: {args}')
         # Use torch.multiprocessing.spawn to launch distributed processes: the
-        # main_worker process function
+        # main_worker process function. (nprocs=ngpus_per_node means ONE process for each gpu)
         mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
     else:
+        logger.info(f'updated args: {args}')
         # Simply call main_worker function
         main_worker(args.gpu, ngpus_per_node, args)

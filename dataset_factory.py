@@ -1,5 +1,6 @@
 import math
 import os
+import pathlib
 import threading
 import timeit
 
@@ -10,7 +11,8 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from logzero import logger
-logzero.logfile(os.path.join(os.environ['RES_PATH'], 'log.txt'), maxBytes=1e6, backupCount=3)
+pathlib.Path(os.environ['RES_PATH']).mkdir(parents=True, exist_ok=True)
+logzero.logfile(os.path.join(os.environ['RES_PATH'], 'log.txt'), backupCount=3)
 
 import utils
 from MF_RP_mat_h5support import H5_NODE_NAME
@@ -49,7 +51,7 @@ class Trajectory_Feature_Dataset(Dataset):
 def calc_RP_data_mean_std(dataset_name, data_type, use_gpu=False):
     if os.path.exists(f'./data/{dataset_name}_features/mean.npy') and os.path.exists(f'./data/{dataset_name}_features/std.npy'):
         mean, std = np.load(f'./data/{dataset_name}_features/mean.npy'), np.load(f'./data/{dataset_name}_features/std.npy')
-        logger.info(f'loading calculated mean and std from file, mean:{mean}, std:{std}')
+        logger.info(f'loading calculated mean and std from file, mean: {mean}, std: {std}')
         return mean, std
     logger.info(f'calc_RP_data_mean_std for {dataset_name}...')
     class RP_Data(Dataset):
@@ -105,18 +107,5 @@ def calc_RP_data_mean_std(dataset_name, data_type, use_gpu=False):
 
 
 if __name__ == '__main__':
-    # data_set = Dataset('geolife')
-    # x_RP_train = data_set.x_RP_train
-    # x_RP_test = data_set.x_RP_test
-    # x_features_series_train = data_set.x_features_series_train
-    # x_features_series_test = data_set.x_features_series_test
-    # x_centroids_train = data_set.x_centroids_train
-    # x_centroids_test = data_set.x_centroids_test
-    # y_train = data_set.y_train
-    # y_test = data_set.y_test
-    # RP_mats_h5file = synchronized_open_file('data\geolife_features\RP_mats_train.h5', mode='a')
-    # multi_channel_RP_mats = RP_mats_h5file.get_node('/' + 'RP_data')
-    # a = multi_channel_RP_mats[0]
-    # calc_RP_data_mean_std('geolife', 'train', False)
-    TFD = Trajectory_Feature_Dataset('geolife', 'train')
+    TFD = Trajectory_Feature_Dataset('SHL', 'train')
     a = TFD[0]
