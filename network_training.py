@@ -449,7 +449,7 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', default=ALPHA, type=float)
     parser.add_argument('--beta', default=BETA, type=float)
     parser.add_argument('--gamma', default=GAMMA, type=float)
-    parser.add_argument('--n-channels', default=5, type=float)
+    parser.add_argument('--n-channels', default=N_CLASS, type=float)
     parser.add_argument('--RP-emb-dim', type=int)
     parser.add_argument('--FS-emb-dim', type=int)
     parser.add_argument('--patience', type=int, default=15)

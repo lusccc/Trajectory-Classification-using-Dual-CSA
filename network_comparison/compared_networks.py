@@ -78,3 +78,8 @@ class LSTMFCN(nn.Module):
         y = self.softmax(x)
 
 #######################################################################
+
+if __name__ == '__main__':
+    model = LSTMFCN(200, 5)
+    print(model)
+    summary(model, (200,))

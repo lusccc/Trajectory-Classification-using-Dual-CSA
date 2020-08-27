@@ -2,6 +2,8 @@ import argparse
 import importlib
 import os
 import pathlib
+import timeit
+from math import inf
 
 import logzero
 import numpy as np
@@ -75,6 +77,37 @@ class Trajectory_Feature_Segment_Dataset(Dataset):
 def get_network(name):
     network = getattr(importlib.import_module("compared_network"), name)
     return network()
+
+def train(args, model, train_loader, test_loader, train_sampler=None, device=None):
+    logger.info(get_log_str(args, 'training...'))
+    train_start = timeit.time.perf_counter()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    criterion = nn.CrossEntropyLoss()
+    best_score = inf
+    not_improving_step = 0
+
+    for epoch in range(args.start_epoch, args.epochs, ):
+        epoch_start = timeit.time.perf_counter()
+
+        accum_train_loss = 0
+        accum_test_loss = 0
+
+        # in DistributedDataParallel training, the size of train_sampler.dataset is not equal to actual sample number
+        n_total_train_samples = 0
+        n_total_test_samples = 0
+
+        # train model
+        model.train()
+        train_sampler.set_epoch(epoch)
+        for batch_idx, (FS, true_label) in enumerate(train_loader):
+            batch_start = timeit.time.perf_counter()
+            FS, true_label = FS.to(device), true_label.to(device)
+            pred_label = model(FS)
+            optimizer.zero_grad()
+            loss =
+
+
+
 
 
 def main_worker(proc, args):
