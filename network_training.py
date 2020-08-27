@@ -29,6 +29,11 @@ https://github.com/pytorch/examples/tree/master/imagenet
 '''
 
 
+def cleanup(args):
+    logger.info(get_log_str(args, 'cleaning up...'))
+    dist.destroy_process_group()
+
+
 def get_log_str(args, str):
     return f'[node:{args.node} rank:{args.rank}] {str}'
 
@@ -38,7 +43,7 @@ def try_to_save_model(args, model, path):
     # to avoid save multiple time and cause parallel writing/reading issue
     if not args.no_save_model and (not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                                             and args.rank % args.ngpus_per_node == 0)):
-        logger.info(get_log_str(args, f'using node {args.node} rank {args.rank} to save model, path: {path}'))
+        logger.info(get_log_str(args, f'saving model using node {args.node} rank {args.rank}, path: {path}'))
         torch.save(model.state_dict(), path)
 
     # Use a barrier() to make sure that other process loads the model after process
@@ -141,7 +146,7 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
                 logger.info(get_log_str(args, f'* best: {best_score}, NOT IMPROVING STEP: {not_improving_step}'))
     logger.info(
         get_log_str(args,
-                    f'END PRETRAIN ON NODE {args.node}, RANK: {args.rank}, TIME: {timeit.time.perf_counter() - pretrain_start:.2f}s'))
+                    f'END PRETRAINING ON NODE {args.node}, RANK: {args.rank}, TIME: {timeit.time.perf_counter() - pretrain_start:.2f}s'))
 
 
 def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss_weight=[1, 1, 1], device=None):
@@ -245,7 +250,7 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
                 logger.info(get_log_str(args, f'* best: {best_score}, NOT IMPROVING STEP: {not_improving_step}'))
     logger.info(
         get_log_str(args,
-                    f'END JOINT TRAIN ON NODE {args.node}, RANK: {args.rank}, TIME: {timeit.time.perf_counter() - joint_train_start:.2f}s'))
+                    f'END JOINT TRAINING ON NODE {args.node}, RANK: {args.rank}, TIME: {timeit.time.perf_counter() - joint_train_start:.2f}s'))
 
 
 def test_predict(args, model, test_loader, loss_weight=[1, 1, 1], device=None):
@@ -284,7 +289,7 @@ def test_predict(args, model, test_loader, loss_weight=[1, 1, 1], device=None):
                                 f'test_acc: {test_acc:.5f}'))
         logger.info(
             get_log_str(args,
-                        f'END TEST PREDICT ON NODE {args.node}, RANK: {args.rank}, TIME: {timeit.time.perf_counter() - predict_start:.2f}s'))
+                        f'END TEST PREDICTING ON NODE {args.node}, RANK: {args.rank}, TIME: {timeit.time.perf_counter() - predict_start:.2f}s'))
 
         show_classification_results(args, pred_labels, true_labels)
 
@@ -300,7 +305,7 @@ def show_classification_results(args, y_pred, y_true, label_names=['walk', 'bike
         # logger.info(get_log_str(args, str(cm)))
         logger.info(get_log_str(args, f'classification_report:\n{str(re)}'))
         # logger.info(get_log_str(args, str(re)))
-        with open(os.path.join(args.results_path, 'classification_results.txt'), 'w') as f:
+        with open(os.path.join(args.results_path, 'classification_results.txt'), 'a') as f:
             print(cm, file=f)
             print(re, file=f)
 
@@ -313,6 +318,23 @@ def main_worker(proc, ngpus_per_node, args):
     logger.info(get_log_str(args, f'********THIS IS NODE {node}, PROCESS {proc}********'))
     logger.info(get_log_str(args, f'entering main_worker, process: {proc}, pid: {os.getpid()}'))
     gpu = proc  # process id, i.e., gpu
+
+    if args.seed is not None:
+        # for REPRODUCIBILITY see: https://pytorch.org/docs/stable/notes/randomness.html
+        # and for issue of DDP training, see：
+        # https://stackoverflow.com/questions/62097236/how-to-set-random-seed-when-it-is-in-distributed-training-in-pytorch
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        cudnn.deterministic = True
+        cudnn.benchmark = False
+        logger.warning(get_log_str(args, f'You have chosen to seed training, seed: {args.seed}'
+                                         'This will turn on the CUDNN deterministic setting, '
+                                         'which can slow down your training considerably! '
+                                         'You may see unexpected behavior when restarting '
+                                         'from checkpoints.'))
+    else:
+        cudnn.benchmark = True
 
     # init distributed data parallel
     args.gpu = gpu
@@ -385,10 +407,10 @@ def main_worker(proc, ngpus_per_node, args):
                              shuffle=False, num_workers=args.workers, pin_memory=True)
 
     # start training or evaluating
-    cudnn.benchmark = True
     if args.evaluate:
         model = load_saved_model(args, os.path.join(args.results_path, 'Dual_CSA.pt'), model)
         test_predict(args, model, test_loader, [args.alpha, args.beta, args.gamma], device)
+        cleanup(args)
         return
 
     if args.pretrained:
@@ -417,6 +439,7 @@ def main_worker(proc, ngpus_per_node, args):
         # load best Dual_CSA model to predict
         model = load_saved_model(args, os.path.join(args.results_path, 'Dual_CSA.pt'), model)
         test_predict(args, model, test_loader, [args.alpha, args.beta, args.gamma], device)
+    cleanup(args)
 
 
 if __name__ == '__main__':
@@ -483,17 +506,7 @@ if __name__ == '__main__':
     pathlib.Path(os.path.join(args.results_path, 'visualization')).mkdir(parents=True, exist_ok=True)
     logger.info('args: ' + str(args))
 
-    # write params to args
-    if args.seed is not None:
-        random.seed(args.seed)
-        torch.manual_seed(args.seed)
-        cudnn.deterministic = True
-        logger.warning('You have chosen to seed training. '
-                       'This will turn on the CUDNN deterministic setting, '
-                       'which can slow down your training considerably! '
-                       'You may see unexpected behavior when restarting '
-                       'from checkpoints.')
-
+    # write some params to args
     if args.gpu is not None:
         logger.warning('You have chosen a specific GPU. This will completely '
                        'disable data parallelism.')

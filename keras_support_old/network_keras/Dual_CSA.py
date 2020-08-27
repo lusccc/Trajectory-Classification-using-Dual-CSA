@@ -34,7 +34,7 @@ tf.compat.v1.keras.backend.set_session(session)
 
 
 def log(info):
-    with open(os.path.join(results_path, 'log.txt'), 'a') as f:
+    with open(os.path.join(results_path, 'lines.txt'), 'a') as f:
         print('★ ', end='')
         print(info)
         print('★ ', end='', file=f)
@@ -70,7 +70,7 @@ def RP_Conv2D_AE():
     """ -----RP_conv_ae------"""
     RP_mat_size = data_set.multi_channel_RP_mat_test.shape[1]  # 40
     n_features = data_set.multi_channel_RP_mat_test.shape[3]
-    # our network_keras will maxpooling 3 times with size 2, i.e., 8 times smaller.
+    # our network_keras will maxpooling 3 train_times with size 2, i.e., 8 train_times smaller.
     # here we check if the size fit to the network_keras, or we apply zero padding
     zero_padding = 0
     if RP_mat_size % 8 != 0:
@@ -86,7 +86,7 @@ def RP_Conv2D_AE():
 def ts_Conv1d_AE():
     n_features = data_set.multi_feature_segment_test.shape[3]
     seg_size = data_set.multi_feature_segment_test.shape[2]
-    # our network_keras will maxpooling 3 times with size 2, i.e., 8 times smaller.
+    # our network_keras will maxpooling 3 train_times with size 2, i.e., 8 train_times smaller.
     # here we check if the size fit to the network_keras, or we apply zero padding
     zero_padding = 0
     if seg_size % 8 != 0:
@@ -200,7 +200,7 @@ def train_classifier(pretrained=True, epochs=100, batch_size=200, patience=30):
     visulazation_callback = SAE_embedding_visualization_callback(os.path.join(results_path, 'sae_cp_{epoch}.h5'))
     # if pretrained:
     #     with strategy.scope():
-    #         log('loading trained dual ae...')
+    #         lines('loading trained dual ae...')
     #         load_model(os.path.join(results_path, 'RP_conv_ae_check_point.model'))
     #         load_model(os.path.join(results_path, 'ts_conv_ae_check_point.model'))
     if exists(cp_path):
@@ -269,7 +269,7 @@ class Dynamic_loss_weights_callback(Callback):
         #     rp_rate = np.abs(np.mean(np.diff(self.hist_RP_loss[-3:])))
         #     cls_rate = np.abs(np.mean(np.diff(self.hist_cls_loss[-3:])))
         #     ts_rate = np.abs(np.mean(np.diff(self.hist_cls_loss[-3:])))
-        #     log(f'avg loss chage rate:{rp_rate} {cls_rate} {ts_rate}')
+        #     lines(f'avg loss chage rate:{rp_rate} {cls_rate} {ts_rate}')
         #
         #     max_idx = np.argmax([rp_rate, cls_rate, ts_rate])
         #     min_idx = np.argmin([rp_rate, cls_rate, ts_rate])
@@ -389,7 +389,7 @@ if __name__ == '__main__':
     #  embedding will be concated to match EMB_DIM,
     # i.e. centroid has dim EMB_DIM"""
     # EMB_DIM = x_centroids_train.shape[2]
-    # log(f'EMB_DIM:{EMB_DIM}')
+    # lines(f'EMB_DIM:{EMB_DIM}')
     # n_ae = 2  # num of ae
     # each_embedding_dim = int(EMB_DIM / n_ae)
 

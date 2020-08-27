@@ -1,0 +1,8 @@
+cd ..
+
+export RES_PATH=./results/aaa
+python network_training.py --dataset SHL --results-path ./results/aaa --alpha 1 --beta 1 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 290 --pretrained --epochs 5 --seed 2020666; rm -rf ./results/aaa/Dual_CSA.pt
+python network_training.py --dataset SHL --results-path ./results/aaa --alpha 1 --beta 1 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 290 --pretrained --epochs 5 --seed 2020666; rm -rf ./results/aaa/Dual_CSA.pt
+python network_training.py --dataset SHL --results-path ./results/aaa --alpha 1 --beta 1 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 290 --pretrained --epochs 5 --seed 2020666; rm -rf ./results/aaa/Dual_CSA.pt
+python network_training.py --dataset SHL --results-path ./results/aaa --alpha 1 --beta 1 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 290 --pretrained --epochs 5 --seed 2020666; rm -rf ./results/aaa/Dual_CSA.pt
+python network_training.py --dataset SHL --results-path ./results/aaa --alpha 1 --beta 1 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 290 --pretrained --epochs 5 --seed 2020666; rm -rf ./results/aaa/Dual_CSA.pt

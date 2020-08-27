@@ -21,7 +21,7 @@ from params import MULTI_GPU
 
 
 def log(info):
-    with open(os.path.join(results_path, 'log.txt'), 'a') as f:
+    with open(os.path.join(results_path, 'lines.txt'), 'a') as f:
         print(info)
         print(info, file=f)
 
@@ -207,7 +207,7 @@ if __name__ == '__main__':
     RP_conv2d_ae = RP_Conv2D_AE()
     ts_conv2d_ae = ts_Conv2d_AE()
     dual_sae = dual_Softmax_AE()
-    tb = TensorBoard(log_dir=os.path.join(results_path, 'tensorflow_logs'),  # log 目录
+    tb = TensorBoard(log_dir=os.path.join(results_path, 'tensorflow_logs'),  # lines 目录
                      histogram_freq=0,  # 按照何等频率（epoch）来计算直方图，0为不计算
                      #                  batch_size=32,     # 用多大量的数据计算直方图
                      write_graph=True,  # 是否存储网络结构图

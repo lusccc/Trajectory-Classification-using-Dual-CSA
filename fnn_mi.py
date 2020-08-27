@@ -10,7 +10,7 @@ from sklearn.neighbors import NearestNeighbors
 def takensEmbedding(data, delay, dimension):
     "This function returns the Takens embedding of data with delay into dimension, delay*dimension must be < len(data)"
     if delay * dimension > len(data):
-        raise NameError('Delay times dimension exceed length of data!')
+        raise NameError('Delay train_times dimension exceed length of data!')
     embeddedData = np.array([data[0:len(data) - delay * dimension]])
     for i in range(1, dimension):
         embeddedData = np.append(embeddedData, [data[i * delay:len(data) - delay * (dimension - i)]], axis=0)

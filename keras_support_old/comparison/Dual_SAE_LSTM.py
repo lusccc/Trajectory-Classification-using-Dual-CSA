@@ -17,7 +17,7 @@ from keras.utils import plot_model, multi_gpu_model
 from sklearn.metrics import confusion_matrix, classification_report
 
 from trajectory_extraction_geolife import modes_to_use
-from comparison.LSTM_AE import LSTM_AE
+from keras_support_old.comparison import LSTM_AE
 from keras_support.network_keras import CONV2D_AE
 from params import TOTAL_EMBEDDING_DIM, MULTI_GPU
 from utils import visualizeData
@@ -92,7 +92,7 @@ def dual_SAE():
 
 
 """-----------train---------------"""
-tb = TensorBoard(log_dir='./logs',  # log 目录
+tb = TensorBoard(log_dir='./logs',  # lines 目录
                  histogram_freq=0,  # 按照何等频率（epoch）来计算直方图，0为不计算
                  #                  batch_size=32,     # 用多大量的数据计算直方图
                  write_graph=True,  # 是否存储网络结构图

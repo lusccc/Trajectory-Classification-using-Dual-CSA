@@ -18,7 +18,7 @@ def read_res_acc(folder_prefix):
     accs = []
     for i in range(8, dim_limit, 8):
         exp_path = os.path.join(res_path, f'{folder_prefix}{i}')
-        log_path = os.path.join(exp_path, 'log.txt')
+        log_path = os.path.join(exp_path, 'lines.txt')
         log = open(log_path, encoding='utf-8').readlines()
         acc = float(log[-2][57:])  # Penultimate line, and only cut acc value
         accs.append(acc)

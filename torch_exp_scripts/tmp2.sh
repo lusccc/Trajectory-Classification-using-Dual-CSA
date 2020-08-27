@@ -17,4 +17,12 @@ python network_training.py --dataset SHL --results-path ./results/SHL_pretrained
 
 
 export RES_PATH=./results/aaa
-python network_training.py --dataset SHL --results-path ./results/aaa --alpha 1 --beta 1 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 460 --pretrained --epochs 2
+python network_training.py --dataset SHL --results-path ./results/aaa --alpha 1 --beta 1 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 460 --pretrained --epochs 1
+echo 'waiting last job to completely exit...'
+sleep 6
+python network_training.py --dataset SHL --results-path ./results/aaa --alpha 1 --beta 1 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 460 --pretrained --epochs 1
+echo 'waiting last job to completely exit...'
+sleep 6
+python network_training.py --dataset SHL --results-path ./results/aaa --alpha 1 --beta 1 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 460 --pretrained --epochs 1
+echo 'waiting last job to completely exit...'
+sleep 6
