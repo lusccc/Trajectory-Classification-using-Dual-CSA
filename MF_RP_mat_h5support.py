@@ -135,7 +135,7 @@ def do_generate_RP_mats(multi_features_segs, dim, tau, n_features, save_path, h5
             RP_mat = np.expand_dims(RP_mat, 0)  # (1, n_vec, n_vec)
             multi_channels_RP_mat.append(RP_mat)
         multi_channels_RP_mat = np.stack(multi_channels_RP_mat, axis=0)  # ( n_feature, 1, n_vec, n_vec)
-        multi_channels_RP_mat = np.squeeze(multi_channels_RP_mat)  # (n_feature, n_vec, n_vec )
+        multi_channels_RP_mat = np.squeeze(multi_channels_RP_mat,  axis=1)  # (n_feature, n_vec, n_vec )
         multi_channels_RP_mat = np.expand_dims(multi_channels_RP_mat, axis=0)  # (1, n_feature, n_vec, n_vec)
         RP_mats_h5array.append(multi_channels_RP_mat)
     synchronized_close_file(LOCK, RP_mats_h5file)
@@ -152,19 +152,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='RP_mat')
     parser.add_argument('--dim', default=DIM, type=int)
     parser.add_argument('--tau', default=TAU, type=int)
-    parser.add_argument('--feature_set', type=str)
     parser.add_argument('--multi_feature_segs_path', type=str, required=True)
     parser.add_argument('--save_path', type=str, required=True)
 
     args = parser.parse_args()
     logger.info('dim:{} tau:{}'.format(args.dim, args.tau))
-    if args.feature_set is None:
-        feature_set = FEATURES_SET_1
-    else:
-        feature_set = [int(item) for item in args.feature_set.split(',')]
-    logger.info('feature_set:{}'.format(feature_set))
 
-    multi_feature_segs = np.load(args.multi_feature_segs_path)  # !!note load un-normalized data to generate RP
+    # !!note load un-normalized data to generate RP
+    multi_feature_segs = np.load(args.multi_feature_segs_path)
     n_features = multi_feature_segs.shape[1]
     n_samples = multi_feature_segs.shape[0]
     n_timestamps = multi_feature_segs.shape[2]

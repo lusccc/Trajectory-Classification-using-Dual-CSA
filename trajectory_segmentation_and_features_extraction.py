@@ -213,15 +213,15 @@ def do_calc_trj_seg_clean_multi_features(trj_segs, trj_seg_labels, fill_seg_func
 
         multi_feature_seg = np.array(
             [fill_seg_function(delta_times, target_size=seg_size),
-                 fill_seg_function(hours, target_size=seg_size),
-                 fill_seg_function(distances, target_size=seg_size),
-                 fill_seg_function(velocities, target_size=seg_size),
-                 fill_seg_function(accelerations, target_size=seg_size),
-                 fill_seg_function(headings, target_size=seg_size),
-                 fill_seg_function(heading_changes, target_size=seg_size),
-                 fill_seg_function(heading_change_rates, target_size=seg_size),
-                 fill_seg_function(stops, target_size=seg_size),
-                 fill_seg_function(turnings, target_size=seg_size)])
+             fill_seg_function(hours, target_size=seg_size),
+             fill_seg_function(distances, target_size=seg_size),
+             fill_seg_function(velocities, target_size=seg_size),
+             fill_seg_function(accelerations, target_size=seg_size),
+             fill_seg_function(headings, target_size=seg_size),
+             fill_seg_function(heading_changes, target_size=seg_size),
+             fill_seg_function(heading_change_rates, target_size=seg_size),
+             fill_seg_function(stops, target_size=seg_size),
+             fill_seg_function(turnings, target_size=seg_size)])
         multi_feature_segs.append(multi_feature_seg)
         multi_feature_seg_labels.append(trj_seg_label)
 
@@ -398,6 +398,8 @@ if __name__ == '__main__':
     logger.info(f'saving files to {save_dir}')
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
+    np.save(f'{save_dir}/multi_feature_segs_{data_type}_all_features_normalized.npy',
+            scale_segs_each_features(multi_feature_segs.copy()))  # note copied, to avoid change original data
     multi_feature_segs = multi_feature_segs[:, feature_set, :]
     np.save(f'{save_dir}/multi_feature_segs_{data_type}.npy', multi_feature_segs)
     multi_feature_segs_normalized = scale_segs_each_features(multi_feature_segs)

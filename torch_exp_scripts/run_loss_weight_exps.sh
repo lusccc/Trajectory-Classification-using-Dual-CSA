@@ -1,10 +1,10 @@
 # dim=3 tau=8;emb=304
-alpha=(1 1 1 1 1 1 1 1 1 1)
-beta=(1 2 3 4 5 6 7 8 9 10)
-gamma=(1 1 1 1 1 1 1 1 1 1)
+alpha=(1 1 1 1 1 1 1 1 1 1 1 1 1 1)
+beta=(1 2 3 4 5 6 7 8 9 10 11 12 13 14)
+gamma=(1 1 1 1 1 1 1 1 1 1 1 1 1 1)
 cd ..
-for j in $(seq 10 1 15); do
-  for i in $(seq 0 1 9); do
+for j in $(seq 0 1 4); do
+  for i in $(seq 10 1 13); do
     path="./results/SHL_loss${alpha[${i}]},${beta[${i}]},${gamma[${i}]}_exp${j}/"
     export RES_PATH=${path}
     mkdir -p ${path}

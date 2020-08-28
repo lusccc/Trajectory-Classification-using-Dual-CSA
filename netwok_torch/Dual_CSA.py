@@ -69,7 +69,8 @@ class Dual_CSA(nn.Module):
             soft_label = self.PCC(concat_emb)
         else:
             soft_label = None
-        return RP_recon, soft_label, FS_recon
+            concat_emb = None
+        return RP_recon, soft_label, FS_recon, concat_emb
 
 
 if __name__ == '__main__':
@@ -80,5 +81,6 @@ if __name__ == '__main__':
          [4, 4, 4, 4]]
     )
     model = Dual_CSA(5, 2, 2, ces)
+    model.pretrain = False
     print(model)
     summary(model, [(5, 184, 184), (5, 200)])

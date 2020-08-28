@@ -13,15 +13,14 @@ from tensorflow.python.keras.utils.vis_utils import plot_model
 
 import numpy as np
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-
 from logzero import logger
-
-from params import modes_to_use, N_CLASS
+from params import modes_to_use, N_CLASS, MAX_SEGMENT_SIZE, FEATURES_SET_1
 
 pathlib.Path(os.environ['RES_PATH']).mkdir(parents=True, exist_ok=True)
 logzero.logfile(os.path.join(os.environ['RES_PATH'], 'log.txt'), backupCount=3)
 
+
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 def LSTM_FCN_Softmax(timesteps, embedding_dim, n_features, n_class):
@@ -60,13 +59,10 @@ def LSTM_FCN_Softmax(timesteps, embedding_dim, n_features, n_class):
 
 def train(epochs=100, batch_size=200):
     logger.info('training...')
-    factor = 1. / np.cbrt(2)
     model_checkpoint = ModelCheckpoint(os.path.join(os.environ['RES_PATH'], "lstm_fcn_softmax.model"), verbose=1,
                                        monitor='val_accuracy', save_best_only=True, mode='max')
-    reduce_lr = ReduceLROnPlateau(monitor='loss', patience=100, mode='auto',
-                                  factor=factor, cooldown=0, min_lr=1e-4, verbose=2)
-    early_stopping = EarlyStopping(monitor='val_loss', patience=patience, verbose=2)
-    callback_list = [model_checkpoint, reduce_lr, early_stopping]
+    early_stopping = EarlyStopping(monitor='val_accuracy', patience=patience, verbose=2)
+    callback_list = [model_checkpoint, early_stopping]
 
     hist = model.fit(x_train, y_train, epochs=epochs,
                      batch_size=batch_size, shuffle=True,
@@ -79,9 +75,7 @@ def train(epochs=100, batch_size=200):
                                                                              np.max(hist.history['val_accuracy'])))
 
 
-def show_confusion_matrix():
-    model = load_model(os.path.join(os.environ['RES_PATH'], "lstm_fcn_softmax.model"),
-                       custom_objects={'N_CLASS': N_CLASS})
+def show_confusion_matrix(model, x_test, y_test):
     pred = model.predict(x_test)
     y_pred = np.argmax(pred, axis=1)
     y_true = np.argmax(y_test, axis=1)
@@ -94,6 +88,7 @@ def show_confusion_matrix():
         print(cm, file=f)
         print(re, file=f)
 
+
 def load_data(dataset_name, data_type):
     dataset_name = dataset_name
     data_type = data_type
@@ -104,7 +99,7 @@ def load_data(dataset_name, data_type):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='LSTM_FCN')
+    parser = argparse.ArgumentParser(description='LSTM_FCN_Softmax')
     parser.add_argument('--dataset', type=str, required=True)
     parser.add_argument('--results-path', required=True, type=str)
     args = parser.parse_args()
@@ -112,10 +107,12 @@ if __name__ == "__main__":
 
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
-        model = LSTM_FCN_Softmax(200, 32, 5, 5)
+        model = LSTM_FCN_Softmax(MAX_SEGMENT_SIZE, 32, len(FEATURES_SET_1), N_CLASS)
     patience = 20
     x_train, y_train = load_data(dataset, 'train')
     x_test, y_test = load_data(dataset, 'test')
     print()
     train(3000)
-    show_confusion_matrix()
+    model = load_model(os.path.join(os.environ['RES_PATH'], "lstm_fcn_softmax.model"),
+                       custom_objects={'N_CLASS': N_CLASS})
+    show_confusion_matrix(model, x_test, y_test)

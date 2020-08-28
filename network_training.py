@@ -16,10 +16,13 @@ from torch.utils.data import DataLoader
 import torch.multiprocessing as mp
 import dataset_factory
 from netwok_torch.Dual_CSA import Dual_CSA
+from network_comparison.Dual_CA_Softmax_torch import Dual_CA_Softmax
 from params import *
 import numpy as np
 import logzero
 from logzero import logger
+
+from utils import visualize_data
 
 logzero.logfile(os.path.join(os.environ['RES_PATH'], 'log.txt'), backupCount=3)
 
@@ -46,9 +49,8 @@ def try_to_save_model(args, model, path):
         logger.info(get_log_str(args, f'saving model using node {args.node} rank {args.rank}, path: {path}'))
         torch.save(model.state_dict(), path)
 
-    # Use a barrier() to make sure that other process loads the model after process
-    # 0 saves it.
-    # https://stackoverflow.com/questions/59760328/how-does-torch-distributed-barrier-work
+    # Use a barrier() to make sure that other process loads the model after process 0 saves it.
+    # see https://stackoverflow.com/questions/59760328/how-does-torch-distributed-barrier-work
     dist.barrier()
 
 
@@ -61,13 +63,6 @@ def load_saved_model(args, path, model):
         loc = 'cuda:{}'.format(args.gpu)
         model.load_state_dict(torch.load(path, map_location=loc))
     return model
-
-
-def adjust_learning_rate(optimizer, epoch, args):
-    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 30))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
 
 
 def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=None):
@@ -86,7 +81,7 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
         accum_train_loss = 0
         accum_test_loss = 0
 
-        # in DistributedDataParallel training, the size of train_sampler.dataset is not equal to actual sample number
+        # ? in DistributedDataParallel training, the size of train_sampler.dataset is not equal to actual sample number
         n_total_train_samples = 0
         n_total_test_samples = 0
 
@@ -98,7 +93,7 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
             batch_start = timeit.time.perf_counter()
             RP, FS = RP.to(device), FS.to(device)
             optimizer.zero_grad()
-            RP_recon, __, FS_recon = model(RP, FS)
+            RP_recon, __, FS_recon, ___ = model(RP, FS)
             loss = recon_criterion(RP_recon, RP) + recon_criterion(FS_recon, FS)
             loss.backward()
             optimizer.step()
@@ -117,7 +112,7 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
         with torch.no_grad():
             for RP, FS, _ in test_loader:
                 RP, FS = RP.to(device), FS.to(device)
-                RP_recon, __, FS_recon = model(RP, FS)
+                RP_recon, __, FS_recon, ___ = model(RP, FS)
                 loss = recon_criterion(RP_recon, RP) + recon_criterion(FS_recon, FS)
                 n_total_test_samples += len(RP)
                 accum_test_loss += loss.item() * len(RP)
@@ -138,15 +133,29 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
         else:
             not_improving_step += 1
             if not_improving_step > args.patience:
-                logger.info(
-                    get_log_str(args,
-                                f'* best score: {best_score}, NOT IMPROVING STEP:{not_improving_step}, EARLY STOP!'))
+                logger.info(get_log_str(args, f'* best score: {best_score}, '
+                                              f'NOT IMPROVING STEP:{not_improving_step}, EARLY STOP!'))
                 break
             else:
                 logger.info(get_log_str(args, f'* best: {best_score}, NOT IMPROVING STEP: {not_improving_step}'))
-    logger.info(
-        get_log_str(args,
-                    f'END PRETRAINING ON NODE {args.node}, RANK: {args.rank}, TIME: {timeit.time.perf_counter() - pretrain_start:.2f}s'))
+
+    if args.visualize_emb:
+        model = load_saved_model(args, os.path.join(args.results_path, 'pretrained_AE.pt'), model)
+        model.eval()
+        with torch.no_grad():
+            test_concat_embs = []
+            test_true_labels = []
+            for RP, FS, true_label in test_loader:
+                RP, FS = RP.to(device), FS.to(device)
+                RP_recon, __, FS_recon, concat_emb = model(RP, FS)
+                test_concat_embs.extend(concat_emb.cpu().numpy().tolist())
+                test_true_labels.extend(true_label.tolist())
+        visualize_data(np.array(test_concat_embs), test_true_labels, N_CLASS,
+                       os.path.join(args.results_path, 'visualization', 'pretrained_emb.png'))
+
+
+    logger.info(get_log_str(args, f'END PRETRAINING ON NODE {args.node}, '
+                                  f'RANK: {args.rank}, TIME: {timeit.time.perf_counter() - pretrain_start:.2f}s'))
 
 
 def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss_weight=[1, 1, 1], device=None):
@@ -155,7 +164,10 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
     model.module.pretrain = False
     optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.weight_decay)  # weight_decay added
     recon_criterion = nn.MSELoss()
-    pedcc_criterion = nn.KLDivLoss(reduction='batchmean')
+    if args.network == 'Dual_CSA':
+        classification_criterion = nn.KLDivLoss(reduction='batchmean')
+    elif args.network == 'Dual_CA_Softmax':
+        classification_criterion = nn.CrossEntropyLoss()
     alpha, beta, gamma = loss_weight
 
     best_score = 0
@@ -182,11 +194,14 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
             batch_start = timeit.time.perf_counter()
             RP, FS, true_label = RP.to(device), FS.to(device), true_label.to(device)
             optimizer.zero_grad()
-            RP_recon, soft_label, FS_recon = model(RP, FS)
+            RP_recon, soft_label, FS_recon, concat_emb = model(RP, FS)
             RP_recon_loss = recon_criterion(RP_recon, RP)
-            pedcc_classification_loss = pedcc_criterion(torch.log(soft_label).float(), true_label)
+            if args.network == 'Dual_CSA':
+                classification_loss = classification_criterion(torch.log(soft_label).float(), true_label)
+            elif args.network == 'Dual_CA_Softmax':
+                classification_loss = classification_criterion(soft_label.float(), true_label)
             FS_recon_loss = recon_criterion(FS_recon, FS)
-            combine_loss = alpha * RP_recon_loss + beta * pedcc_classification_loss + gamma * FS_recon_loss
+            combine_loss = alpha * RP_recon_loss + beta * classification_loss + gamma * FS_recon_loss
             combine_loss = combine_loss
             combine_loss.backward()
             optimizer.step()
@@ -201,7 +216,7 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
                                               f'[{batch_idx + 1:>{align_width}} '
                                               f'/{len(train_loader):>{align_width}}], '
                                               f'RP_recon_loss: {RP_recon_loss.item():.6f}, '
-                                              f'pedcc_classification_loss: {pedcc_classification_loss.item():.6f}, '
+                                              f'classification_loss: {classification_loss.item():.6f}, '
                                               f'FS_recon_loss: {FS_recon_loss.item():.6f}, '
                                               f'combine_loss: {combine_loss.item():.6f}, '
                                               f'batch time: {timeit.time.perf_counter() - batch_start:.2f}s'))
@@ -209,16 +224,23 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
         # eval model
         model.eval()
         with torch.no_grad():
+            test_concat_embs = []
+            test_true_labels = []
             for batch_idx, (RP, FS, true_label) in enumerate(test_loader):
                 RP, FS, true_label = RP.to(device), FS.to(device), true_label.to(device)
-                RP_recon, soft_label, FS_recon = model(RP, FS)
+                RP_recon, soft_label, FS_recon, concat_emb = model(RP, FS)
+                test_concat_embs.extend(concat_emb.cpu().numpy().tolist())
                 RP_recon_loss = recon_criterion(RP_recon, RP)
-                pedcc_classification_loss = pedcc_criterion(torch.log(soft_label), true_label)
+                if args.network == 'Dual_CSA':
+                    classification_loss = classification_criterion(torch.log(soft_label).float(), true_label)
+                elif args.network == 'Dual_CA_Softmax':
+                    classification_loss = classification_criterion(soft_label.float(), true_label)
                 FS_recon_loss = recon_criterion(FS_recon, FS)
-                combine_loss = alpha * RP_recon_loss + beta * pedcc_classification_loss + gamma * FS_recon_loss
+                combine_loss = alpha * RP_recon_loss + beta * classification_loss + gamma * FS_recon_loss
                 accum_test_loss += combine_loss.item() * len(RP)
                 pred = soft_label.argmax(dim=1, keepdim=True)
                 true_label = true_label.argmax(dim=1, keepdim=True)
+                test_true_labels.extend(true_label.tolist())
                 n_test_pred_correct += pred.eq(true_label).sum().item()
                 n_total_test_samples += len(RP)
 
@@ -233,6 +255,10 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
                                 f'test_acc: {test_acc:.5f}, '
                                 f'epoch time: {timeit.time.perf_counter() - epoch_start:.2f}s'))
 
+        if args.visualize_emb and epoch % args.visualize_emb == 0:
+            visualize_data(np.array(test_concat_embs), test_true_labels, N_CLASS,
+                           os.path.join(args.results_path, 'visualization', f'joint_training_emb_epoch{epoch}.png'))
+
         # early stop
         if test_acc > best_score:
             not_improving_step = 0
@@ -242,15 +268,14 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
         else:
             not_improving_step += 1
             if not_improving_step > args.patience:
-                logger.info(
-                    get_log_str(args,
-                                f'* best score: {best_score}, NOT IMPROVING STEP: {not_improving_step}, EARLY STOP!'))
+                logger.info(get_log_str(args, f'* best score: {best_score}, '
+                                              f'NOT IMPROVING STEP: {not_improving_step}, EARLY STOP!'))
                 break
             else:
                 logger.info(get_log_str(args, f'* best: {best_score}, NOT IMPROVING STEP: {not_improving_step}'))
-    logger.info(
-        get_log_str(args,
-                    f'END JOINT TRAINING ON NODE {args.node}, RANK: {args.rank}, TIME: {timeit.time.perf_counter() - joint_train_start:.2f}s'))
+
+    logger.info(get_log_str(args,  f'END JOINT TRAINING ON NODE {args.node}, '
+                                   f'RANK: {args.rank}, TIME: {timeit.time.perf_counter() - joint_train_start:.2f}s'))
 
 
 def test_predict(args, model, test_loader, loss_weight=[1, 1, 1], device=None):
@@ -263,17 +288,25 @@ def test_predict(args, model, test_loader, loss_weight=[1, 1, 1], device=None):
     with torch.no_grad():
         alpha, beta, gamma = loss_weight
         recon_criterion = nn.MSELoss()
-        pedcc_criterion = nn.KLDivLoss(reduction='batchmean')
+        if args.network == 'Dual_CSA':
+            classification_criterion = nn.KLDivLoss(reduction='batchmean')
+        elif args.network == 'Dual_CA_Softmax':
+            classification_criterion = nn.CrossEntropyLoss()
         test_losses = []
         pred_labels = []
         true_labels = []
+        concat_embs = []
         for batch_idx, (RP, FS, true_label) in enumerate(test_loader):
             RP, FS, true_label = RP.to(device), FS.to(device), true_label.to(device)
-            RP_recon, soft_label, FS_recon = model(RP, FS)
+            RP_recon, soft_label, FS_recon, concat_emb = model(RP, FS)
+            concat_embs.extend(concat_emb.cpu().numpy().tolist())
             RP_recon_loss = recon_criterion(RP_recon, RP)
-            pedcc_classification_loss = pedcc_criterion(torch.log(soft_label), true_label)
+            if args.network == 'Dual_CSA':
+                classification_loss = classification_criterion(torch.log(soft_label).float(), true_label)
+            elif args.network == 'Dual_CA_Softmax':
+                classification_loss = classification_criterion(soft_label.float(), true_label)
             FS_recon_loss = recon_criterion(FS_recon, FS)
-            total_loss = alpha * RP_recon_loss + beta * pedcc_classification_loss + gamma * FS_recon_loss
+            total_loss = alpha * RP_recon_loss + beta * classification_loss + gamma * FS_recon_loss
             test_losses.append(total_loss.item())
             pred = soft_label.argmax(dim=1, keepdim=True)
             pred_labels.extend(pred.tolist())
@@ -287,9 +320,11 @@ def test_predict(args, model, test_loader, loss_weight=[1, 1, 1], device=None):
         logger.info(get_log_str(args, f'==> ' +
                                 f'avg test_loss: {test_loss:.5f}, '
                                 f'test_acc: {test_acc:.5f}'))
-        logger.info(
-            get_log_str(args,
-                        f'END TEST PREDICTING ON NODE {args.node}, RANK: {args.rank}, TIME: {timeit.time.perf_counter() - predict_start:.2f}s'))
+        if args.visualize_emb:
+            visualize_data(np.array(concat_embs), true_labels, N_CLASS,
+                           os.path.join(args.results_path, 'visualization', 'emb_optimal.png'))
+        logger.info(get_log_str(args, f'END TEST PREDICTING ON NODE {args.node}, '
+                                      f'RANK: {args.rank}, TIME: {timeit.time.perf_counter() - predict_start:.2f}s'))
 
         show_classification_results(args, pred_labels, true_labels)
 
@@ -302,9 +337,7 @@ def show_classification_results(args, y_pred, y_true, label_names=['walk', 'bike
         re = classification_report(y_true, y_pred, target_names=['walk', 'bike', 'bus', 'driving', 'train/subway'],
                                    digits=5)
         logger.info(get_log_str(args, f'confusion_matrix:\n{str(cm)}'))
-        # logger.info(get_log_str(args, str(cm)))
         logger.info(get_log_str(args, f'classification_report:\n{str(re)}'))
-        # logger.info(get_log_str(args, str(re)))
         with open(os.path.join(args.results_path, 'classification_results.txt'), 'a') as f:
             print(cm, file=f)
             print(re, file=f)
@@ -347,9 +380,8 @@ def main_worker(proc, ngpus_per_node, args):
             # ADJUST RANK! For multiprocessing distributed training, rank needs to be the
             # global rank among [ALL THE PROCESSES]
             args.rank = args.rank * ngpus_per_node + gpu
-        logger.info(
-            get_log_str(args,
-                        f'Node: {node}: init_process_group, world_size: {args.world_size}, rank among ALL THE PROCESSES: {args.rank}'))
+        logger.info(get_log_str(args, f'Node: {node}: init_process_group, '
+                                      f'world_size: {args.world_size}, rank among ALL THE PROCESSES: {args.rank}'))
         # now here world_size means global process number, rank is the ID of current process
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
@@ -357,7 +389,11 @@ def main_worker(proc, ngpus_per_node, args):
     # create model
     device = 'cpu'
     centroid = torch.from_numpy(np.load(f'./data/{args.dataset}_features/pedcc.npy'))
-    model = Dual_CSA(args.n_channels, args.RP_emb_dim, args.FS_emb_dim, centroid)
+    if args.network == 'Dual_CSA':
+        model = Dual_CSA(args.n_features, args.RP_emb_dim, args.FS_emb_dim, centroid)
+    elif args.network == 'Dual_CA_Softmax':
+        model = Dual_CA_Softmax(args.n_features, args.RP_emb_dim, args.FS_emb_dim)
+
     if not torch.cuda.is_available():
         logger.warning(get_log_str(args, 'using CPU, this will be slow'))
         device = 'cpu'
@@ -445,6 +481,7 @@ def main_worker(proc, ngpus_per_node, args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DCSA_Training')
     parser.add_argument('--dataset', type=str, required=True)
+    parser.add_argument('--network', type=str, default='Dual_CSA')
     parser.add_argument('--results-path', default='./results/default', type=str)
     parser.add_argument('--alpha', default=ALPHA, type=float)
     parser.add_argument('--beta', default=BETA, type=float)
@@ -457,6 +494,8 @@ if __name__ == '__main__':
     parser.add_argument('--no-joint', action='store_true')
     parser.add_argument('--only-pre', action='store_true')
     parser.add_argument('--no-save-model', action='store_true')
+    parser.add_argument('--visualize-emb', type=int, default=5)
+    parser.add_argument('--n-features', type=int, default=5)
 
     parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
@@ -469,10 +508,6 @@ if __name__ == '__main__':
                         help='mini-batch size (default: 256), this is the total '
                              'batch size of all GPUs on the current node when '
                              'using Data Parallel or Distributed Data Parallel')
-    parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
-                        metavar='LR', help='initial learning rate', dest='lr')
-    parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
-                        help='momentum')
     parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)',
                         dest='weight_decay')

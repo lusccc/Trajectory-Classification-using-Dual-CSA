@@ -1,6 +1,6 @@
 cd ..
 for i in $(seq 0 1 9); do
-  path="./results/SHL_lstm_fcn_exp${i}/"
+  path="./results/SHL_lstm_fcn_softmax_exp${i}/"
   export RES_PATH=${path}
   mkdir -p ${path}
   python -m network_comparison.LSTM_FCN_Softmax_keras --dataset SHL --results-path ${path}

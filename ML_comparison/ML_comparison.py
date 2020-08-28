@@ -6,7 +6,10 @@ from trajectory_extraction_geolife import modes_to_use
 from dataset_factory import *
 # from dataset_generation import *
 from params import FEATURES_SET_1
-
+'''
+this file directly feed MFs into ML algorithm, which is not rigorous. The right way
+should feed the statistic segment level features into ML algorithm, i.e., see ML_comparison_hand_crafted.py
+'''
 # RandomForestClassifier(),SVC(),KNeighborsClassifier(),   MLPClassifier(), DecisionTreeClassifier(),
 ml_models = [RandomForestClassifier()]
 

@@ -158,7 +158,7 @@ def padzeros(series, target_size=MAX_SEGMENT_SIZE):
     return new_series
 
 
-def visualizeData(Z, labels, num_clusters, title='visualization_and_analysis.png'):
+def visualize_data(Z, labels, num_clusters, title='visualization_and_analysis.png'):
     '''
     TSNE visualization_and_analysis of the points in latent space Z
     :param Z: Numpy array containing points in latent space in which clustering was performed
@@ -174,6 +174,7 @@ def visualizeData(Z, labels, num_clusters, title='visualization_and_analysis.png
     plt.colorbar(ticks=range(num_clusters))
     fig.savefig(title, dpi=fig.dpi)
     # plt.show()
+    plt.close(fig)
 
 
 def datatime_to_timestamp(dt):

@@ -8,14 +8,15 @@ from sklearn.metrics import mean_squared_error
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 
-alpha = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
-beta = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-gamma = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+alpha = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+beta = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+gamma = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
 
-res_path = 'C:/Users/lsc/Desktop/torch_SHL_loss_weight_exps'
+res_path = 'C:/Users/lsc/Desktop/exps_results/SHL_loss_weight_torch_exps'
 
+n_exp_repeat = 11
 total_accs = []
-for i in range(10):
+for i in range(n_exp_repeat):
     accs = []
     for a, b, g in zip(alpha, beta, gamma):
         exp_path = os.path.join(res_path, f'SHL_loss{a},{b},{g}_exp{i}')
@@ -27,7 +28,7 @@ for i in range(10):
 total_accs = np.array(total_accs)
 
 total_train_times = []
-for i in range(10):
+for i in range(n_exp_repeat):
     train_times = []
     for a, b, g in zip(alpha, beta, gamma):
         exp_path = os.path.join(res_path, f'SHL_loss{a},{b},{g}_exp{i}')

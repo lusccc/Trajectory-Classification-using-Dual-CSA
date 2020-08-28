@@ -12,11 +12,11 @@ modes_to_use = [0, 1, 2, 3, 4, ]  # Trajectory_Feature_Dataset
 
 N_CLASS = len(modes_to_use)
 
-MAX_SEGMENT_SIZE = 152
+MAX_SEGMENT_SIZE = 200
 MIN_N_POINTS = 10
 
 DIM = 3  # Embedding dimension
-TAU = 7  # Embedding delay
+TAU = 8  # Embedding delay
 
 N_VECTORS = MAX_SEGMENT_SIZE - TAU * (DIM - 1)  # RP mat size
 

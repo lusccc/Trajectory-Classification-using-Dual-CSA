@@ -20,7 +20,7 @@ from trajectory_extraction_geolife import modes_to_use
 from keras_support_old.comparison import LSTM_AE
 from keras_support.network_keras import CONV2D_AE
 from params import TOTAL_EMBEDDING_DIM, MULTI_GPU
-from utils import visualizeData
+from utils import visualize_data
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -166,7 +166,7 @@ class SAE_embedding_visualization_callback(ModelCheckpoint):
         if epoch % 4 == 0:
             embedding = dual_encoder.predict([x_RP_test, x_centroids_test, np.squeeze(x_features_series_test)])
             y_true = np.argmax(y_test, axis=1)
-            visualizeData(embedding, y_true, N_CLASS,
+            visualize_data(embedding, y_true, N_CLASS,
                           './results_dsl/visualization_and_analysis/sae_embedding_epoch{}.png'.format(epoch))
 
 
@@ -193,7 +193,7 @@ def visualize_sae_embedding():
     sae = load_model('./results_dsl/sae_check_point.model', custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
     embedding = dual_encoder.predict([x_RP_test, x_centroids_test, x_features_series_test])
     y_true = np.argmax(y_test, axis=1)
-    visualizeData(embedding, y_true, N_CLASS, './results_dsl/visualization_and_analysis/best.png')
+    visualize_data(embedding, y_true, N_CLASS, './results_dsl/visualization_and_analysis/best.png')
 
 
 def visualize_dual_ae_embedding():
@@ -201,11 +201,11 @@ def visualize_dual_ae_embedding():
     load_model('./results_dsl/ts_conv_ae_check_point.model')
     embedding = dual_encoder.predict([x_RP_test, x_centroids_test, np.squeeze(x_features_series_test)])
     y_true = np.argmax(y_test, axis=1)
-    visualizeData(embedding, y_true, N_CLASS, './results_dsl/visualization_and_analysis/dual_ae_embedding.png')
+    visualize_data(embedding, y_true, N_CLASS, './results_dsl/visualization_and_analysis/dual_ae_embedding.png')
 
 
 def visualize_centroids():
-    visualizeData(x_centroids_test[0], modes_to_use, N_CLASS, './results_dsl/visualization_and_analysis/centroids_visualization.png')
+    visualize_data(x_centroids_test[0], modes_to_use, N_CLASS, './results_dsl/visualization_and_analysis/centroids_visualization.png')
 
 
 if __name__ == '__main__':

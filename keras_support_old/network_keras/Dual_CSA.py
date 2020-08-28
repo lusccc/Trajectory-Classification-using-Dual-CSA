@@ -20,7 +20,7 @@ import dataset_factory
 from keras_support_old.network_keras import CONV2D_AE
 from keras_support_old.network_keras.TS_CONV2D_AE import CONV1D_AE
 from params import *
-from utils import visualizeData
+from utils import visualize_data
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
@@ -288,8 +288,8 @@ class SAE_embedding_visualization_callback(ModelCheckpoint):
         if epoch % 4 == 0:
             embedding = dual_encoder.predict([data_set.multi_channel_RP_mat_test, data_set.centroid_test, data_set.multi_feature_segment_test])
             y_true = np.argmax(data_set.label_test, axis=1)
-            visualizeData(embedding, y_true, N_CLASS,
-                          os.path.join(results_path, 'visualization', 'sae_embedding_epoch{}.png'.format(epoch)))
+            visualize_data(embedding, y_true, N_CLASS,
+                           os.path.join(results_path, 'visualization', 'sae_embedding_epoch{}.png'.format(epoch)))
 
 
 def show_confusion_matrix():
@@ -321,7 +321,7 @@ def visualize_sae_embedding():
                      custom_objects={'student_t': student_t, 'N_CLASS': N_CLASS})
     embedding = dual_encoder.predict([data_set.multi_channel_RP_mat_test, data_set.centroid_test, data_set.multi_feature_segment_test])
     y_true = np.argmax(data_set.label_test, axis=1)
-    visualizeData(embedding, y_true, N_CLASS, os.path.join(results_path, 'visualization', 'best.png'))
+    visualize_data(embedding, y_true, N_CLASS, os.path.join(results_path, 'visualization', 'best.png'))
 
 
 def visualize_dual_ae_embedding():
@@ -329,12 +329,12 @@ def visualize_dual_ae_embedding():
     load_model(os.path.join(results_path, 'ts_conv_ae_check_point.model'))
     embedding = dual_encoder.predict([data_set.multi_channel_RP_mat_test, data_set.centroid_test, data_set.multi_feature_segment_test])
     y_true = np.argmax(data_set.label_test, axis=1)
-    visualizeData(embedding, y_true, N_CLASS, os.path.join(results_path, 'visualization', 'dual_ae_embedding.png'))
+    visualize_data(embedding, y_true, N_CLASS, os.path.join(results_path, 'visualization', 'dual_ae_embedding.png'))
 
 
 def visualize_centroids():
-    visualizeData(data_set.centroid_test[0], modes_to_use, N_CLASS,
-                  os.path.join(results_path, 'visualization', 'centroids_visualization.png'))
+    visualize_data(data_set.centroid_test[0], modes_to_use, N_CLASS,
+                   os.path.join(results_path, 'visualization', 'centroids_visualization.png'))
 
 
 if __name__ == '__main__':
