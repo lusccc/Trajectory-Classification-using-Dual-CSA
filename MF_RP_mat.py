@@ -155,7 +155,7 @@ if __name__ == '__main__':
     print(f'n_thread:{n_cpus}')
     pool = multiprocessing.Pool(processes=n_cpus)
     start = time.time()
-    parser = argparse.ArgumentParser(description='RP_mat')
+    parser = argparse.ArgumentParser(description='RP')
     parser.add_argument('--dim', default=DIM, type=int)
     parser.add_argument('--tau', default=TAU, type=int)
     parser.add_argument('--feature_set', type=str)

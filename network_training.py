@@ -2,7 +2,6 @@ import argparse
 import os
 import pathlib
 import random
-import sys
 import timeit
 from math import inf
 
@@ -16,7 +15,8 @@ from torch.utils.data import DataLoader
 import torch.multiprocessing as mp
 import dataset_factory
 from netwok_torch.Dual_CSA import Dual_CSA
-from network_comparison.Dual_CA_Softmax_torch import Dual_CA_Softmax
+from network_variant.CSA_RP import CSA_RP
+from network_variant.Dual_CA_Softmax import Dual_CA_Softmax
 from params import *
 import numpy as np
 import logzero
@@ -34,7 +34,8 @@ https://github.com/pytorch/examples/tree/master/imagenet
 
 def cleanup(args):
     logger.info(get_log_str(args, 'cleaning up...'))
-    dist.destroy_process_group()
+    if args.multiprocessing_distributed:
+        dist.destroy_process_group()
 
 
 def get_log_str(args, str):
@@ -51,7 +52,8 @@ def try_to_save_model(args, model, path):
 
     # Use a barrier() to make sure that other process loads the model after process 0 saves it.
     # see https://stackoverflow.com/questions/59760328/how-does-torch-distributed-barrier-work
-    dist.barrier()
+    if args.multiprocessing_distributed:
+        dist.barrier()
 
 
 def load_saved_model(args, path, model):
@@ -65,10 +67,30 @@ def load_saved_model(args, path, model):
     return model
 
 
+def pretrain_do_forward(args, model, inputs, recon_criterion, device):
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+    if args.network in ['Dual_CSA', 'Dual_CA_Softmax']:
+        outputs = model(inputs['RP'], inputs['FS'])
+    elif args.network == 'CSA_RP':
+        outputs = model(inputs['RP'])
+    elif args.network == 'CSA_FS':
+        outputs = model(inputs['FS'])
+    loss = sum([recon_criterion(*recon_ori) for recon_ori in outputs['recon_ori']])
+    return outputs, loss
+
+
+def pretrain_do_forward_backward(args, optimizer, model, inputs, recon_criterion, device):
+    optimizer.zero_grad()
+    outputs, loss = pretrain_do_forward(args, model, inputs, recon_criterion, device)
+    loss.backward()
+    optimizer.step()
+    return outputs, loss
+
+
 def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=None):
-    logger.info(get_log_str(args, 'pretraining...'))
+    logger.info(get_log_str(args, f'pretraining...'))
     pretrain_start = timeit.time.perf_counter()
-    model.pretrain = True
+
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     recon_criterion = nn.MSELoss()
 
@@ -85,18 +107,14 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
         n_total_train_samples = 0
         n_total_test_samples = 0
 
-        # train model
+        # ========== train code ==========
         model.train()
         if args.distributed:
             train_sampler.set_epoch(epoch)
         for batch_idx, (RP, FS, _) in enumerate(train_loader):
             batch_start = timeit.time.perf_counter()
-            RP, FS = RP.to(device), FS.to(device)
-            optimizer.zero_grad()
-            RP_recon, __, FS_recon, ___ = model(RP, FS)
-            loss = recon_criterion(RP_recon, RP) + recon_criterion(FS_recon, FS)
-            loss.backward()
-            optimizer.step()
+            outputs, loss = pretrain_do_forward_backward(args, optimizer, model, {'RP': RP, 'FS': FS}, recon_criterion,
+                                                         device)
             n_total_train_samples += len(RP)
             accum_train_loss += loss.item() * len(RP)
             align_width = len(str(len(train_loader)))
@@ -106,14 +124,13 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
                                               f'/{len(train_loader):>{align_width}}], '
                                               f'Loss: {loss.item():.6f}, '
                                               f'batch time: {timeit.time.perf_counter() - batch_start:.2f}s'))
+        # ========== end train code ==========
 
-        # eval model
+        # ========== eval code ==========
         model.eval()
         with torch.no_grad():
             for RP, FS, _ in test_loader:
-                RP, FS = RP.to(device), FS.to(device)
-                RP_recon, __, FS_recon, ___ = model(RP, FS)
-                loss = recon_criterion(RP_recon, RP) + recon_criterion(FS_recon, FS)
+                outputs, loss = pretrain_do_forward(args, model, {'RP': RP, 'FS': FS}, recon_criterion, device)
                 n_total_test_samples += len(RP)
                 accum_test_loss += loss.item() * len(RP)
 
@@ -123,6 +140,7 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
                                 f'avg train_loss: {train_loss:.5f}, ' +
                                 f'avg test_loss: {test_loss:.5f}, '
                                 f'epoch time: {timeit.time.perf_counter() - epoch_start:.2f}s'))
+        # ========== end eval code ==========
 
         # early stop
         if test_loss < best_score:
@@ -138,37 +156,73 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
                 break
             else:
                 logger.info(get_log_str(args, f'* best: {best_score}, NOT IMPROVING STEP: {not_improving_step}'))
+        # end early stop
 
     if args.visualize_emb:
         model = load_saved_model(args, os.path.join(args.results_path, 'pretrained_AE.pt'), model)
         model.eval()
         with torch.no_grad():
-            test_concat_embs = []
+            test_embs = []
             test_true_labels = []
             for RP, FS, true_label in test_loader:
-                RP, FS = RP.to(device), FS.to(device)
-                RP_recon, __, FS_recon, concat_emb = model(RP, FS)
-                test_concat_embs.extend(concat_emb.cpu().numpy().tolist())
+                outputs, loss = pretrain_do_forward(args, model, {'RP': RP, 'FS': FS}, recon_criterion, device)
+                test_embs.extend(outputs['emb'].cpu().numpy().tolist())
                 test_true_labels.extend(true_label.tolist())
-        visualize_data(np.array(test_concat_embs), test_true_labels, N_CLASS,
+        visualize_data(np.array(test_embs), test_true_labels, N_CLASS,
                        os.path.join(args.results_path, 'visualization', 'pretrained_emb.png'))
-
 
     logger.info(get_log_str(args, f'END PRETRAINING ON NODE {args.node}, '
                                   f'RANK: {args.rank}, TIME: {timeit.time.perf_counter() - pretrain_start:.2f}s'))
 
 
-def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss_weight=[1, 1, 1], device=None):
-    logger.info(get_log_str(args, 'joint training...'))
-    joint_train_start = timeit.time.perf_counter()
-    model.module.pretrain = False
-    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.weight_decay)  # weight_decay added
-    recon_criterion = nn.MSELoss()
-    if args.network == 'Dual_CSA':
-        classification_criterion = nn.KLDivLoss(reduction='batchmean')
-    elif args.network == 'Dual_CA_Softmax':
-        classification_criterion = nn.CrossEntropyLoss()
+def joint_training_do_forward(args, model, inputs, recon_criterion, cls_criterion, loss_weight, device):
+    inputs = {k: v.to(device) for k, v in inputs.items()}
     alpha, beta, gamma = loss_weight
+
+    if args.network in ['Dual_CSA', 'Dual_CA_Softmax']:
+        outputs = model(inputs['RP'], inputs['FS'])
+    elif args.network == 'CSA_RP':
+        outputs = model(inputs['RP'])
+    elif args.network == 'CSA_FS':
+        outputs = model(inputs['FS'])
+
+    # note: recon_loss is a list
+    recon_loss = [recon_criterion(*recon_ori) for recon_ori in outputs['recon_ori']]
+    cls_loss = cls_criterion(torch.log(outputs['pred']).float(), inputs['true_label']) if args.network == 'Dual_CSA' \
+        else cls_criterion(outputs['pred'].float(), inputs['true_label'].argmax(dim=1, keepdim=True).view(-1))
+
+    if args.network in ['Dual_CSA', 'Dual_CA_Softmax']:
+        # dual AE, dual recon loss
+        combine_loss = alpha * recon_loss[0] + beta * cls_loss + gamma * recon_loss[1]
+    else:
+        # single AE, single recon loss
+        combine_loss = 1 * recon_loss[0] + beta * cls_loss
+    # note: recon_loss is a list
+    return outputs, recon_loss, cls_loss, combine_loss
+
+
+def joint_train_do_forward_backward(args, optimizer, model, inputs, recon_criterion, cls_criterion, loss_weight,
+                                    device):
+    optimizer.zero_grad()
+    # note: recon_loss is a list
+    outputs, recon_loss, cls_loss, combine_loss = joint_training_do_forward(args, model, inputs, recon_criterion,
+                                                                            cls_criterion, loss_weight, device)
+    combine_loss.backward()
+    optimizer.step()
+    # note: recon_loss is a list
+    return outputs, recon_loss, cls_loss, combine_loss
+
+
+def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss_weight=None, device=None):
+    logger.info(get_log_str(args, f'joint training..., loss weight: {loss_weight}'))
+    joint_train_start = timeit.time.perf_counter()
+
+    model.module.set_pretrained(True) if args.multiprocessing_distributed else model.set_pretrained(True)
+    recon_criterion = nn.MSELoss()
+    # batchmean, Considered carefully
+    cls_criterion = nn.KLDivLoss(reduction='batchmean') if args.network in ['Dual_CSA', 'CSA_RP',
+                                                                            'CSA_FS'] else nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.weight_decay)  # weight_decay added
 
     best_score = 0
     not_improving_step = 0
@@ -182,68 +236,54 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
         accum_train_loss = 0
         accum_test_loss = 0
 
-        # in DistributedDataParallel training, the size of train_sampler.dataset is not equal to actual sample number
+        # ? in DistributedDataParallel training, the size of train_sampler.dataset is not equal to actual sample number
         n_total_train_samples = 0
         n_total_test_samples = 0
 
-        # train model
+        # ========== train code ==========
         model.train()
         if args.distributed:
             train_sampler.set_epoch(epoch)
         for batch_idx, (RP, FS, true_label) in enumerate(train_loader):
             batch_start = timeit.time.perf_counter()
-            RP, FS, true_label = RP.to(device), FS.to(device), true_label.to(device)
-            optimizer.zero_grad()
-            RP_recon, soft_label, FS_recon, concat_emb = model(RP, FS)
-            RP_recon_loss = recon_criterion(RP_recon, RP)
-            if args.network == 'Dual_CSA':
-                classification_loss = classification_criterion(torch.log(soft_label).float(), true_label)
-            elif args.network == 'Dual_CA_Softmax':
-                classification_loss = classification_criterion(soft_label.float(), true_label)
-            FS_recon_loss = recon_criterion(FS_recon, FS)
-            combine_loss = alpha * RP_recon_loss + beta * classification_loss + gamma * FS_recon_loss
-            combine_loss = combine_loss
-            combine_loss.backward()
-            optimizer.step()
+            outputs, recon_loss, cls_loss, combine_loss = \
+                joint_train_do_forward_backward(args, optimizer, model,
+                                                {'RP': RP, 'FS': FS, 'true_label': true_label}, recon_criterion,
+                                                cls_criterion, loss_weight, device)
             accum_train_loss += combine_loss.item() * len(RP)
-            pred = soft_label.argmax(dim=1, keepdim=True)
+            pred = outputs['pred'].argmax(dim=1, keepdim=True)
             true_label = true_label.argmax(dim=1, keepdim=True)
             n_train_pred_correct += pred.eq(true_label).sum().item()
             n_total_train_samples += len(RP)
             align_width = len(str(len(train_loader)))
             if batch_idx % args.print_freq == 0 or batch_idx == len(train_loader) - 1:
                 logger.info(get_log_str(args, f'Train Epoch: {epoch}, '
-                                              f'[{batch_idx + 1:>{align_width}} '
+                                              f'[{batch_idx + 1:>{align_width}}'
                                               f'/{len(train_loader):>{align_width}}], '
-                                              f'RP_recon_loss: {RP_recon_loss.item():.6f}, '
-                                              f'classification_loss: {classification_loss.item():.6f}, '
-                                              f'FS_recon_loss: {FS_recon_loss.item():.6f}, '
+                                              f'recon_loss: {[los.item() for los in recon_loss]:.6f}, '  # list
+                                              f'cls_loss: {cls_loss.item():.6f}, '
                                               f'combine_loss: {combine_loss.item():.6f}, '
                                               f'batch time: {timeit.time.perf_counter() - batch_start:.2f}s'))
+        # ========== end train code ==========
 
-        # eval model
+        # ========== eval code ==========
         model.eval()
         with torch.no_grad():
-            test_concat_embs = []
+            test_embs = []
             test_true_labels = []
             for batch_idx, (RP, FS, true_label) in enumerate(test_loader):
-                RP, FS, true_label = RP.to(device), FS.to(device), true_label.to(device)
-                RP_recon, soft_label, FS_recon, concat_emb = model(RP, FS)
-                test_concat_embs.extend(concat_emb.cpu().numpy().tolist())
-                RP_recon_loss = recon_criterion(RP_recon, RP)
-                if args.network == 'Dual_CSA':
-                    classification_loss = classification_criterion(torch.log(soft_label).float(), true_label)
-                elif args.network == 'Dual_CA_Softmax':
-                    classification_loss = classification_criterion(soft_label.float(), true_label)
-                FS_recon_loss = recon_criterion(FS_recon, FS)
-                combine_loss = alpha * RP_recon_loss + beta * classification_loss + gamma * FS_recon_loss
+                outputs, recon_loss, cls_loss, combine_loss = \
+                    joint_training_do_forward(args, model, {'RP': RP, 'FS': FS, 'true_label': true_label},
+                                              recon_criterion, cls_criterion, loss_weight, device)
+                test_embs.extend(outputs['emb'].cpu().numpy().tolist())
                 accum_test_loss += combine_loss.item() * len(RP)
-                pred = soft_label.argmax(dim=1, keepdim=True)
+                pred = outputs['pred'].argmax(dim=1, keepdim=True)
                 true_label = true_label.argmax(dim=1, keepdim=True)
                 test_true_labels.extend(true_label.tolist())
                 n_test_pred_correct += pred.eq(true_label).sum().item()
                 n_total_test_samples += len(RP)
 
+        # TODO: KLD batchmean loss should not be calculated in accumulate way. here for easy display loss info
         train_loss = accum_train_loss / n_total_train_samples
         test_loss = accum_test_loss / n_total_test_samples
         train_acc = n_train_pred_correct / n_total_train_samples
@@ -254,16 +294,18 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
                                 f'avg test_loss: {test_loss:.5f}, '
                                 f'test_acc: {test_acc:.5f}, '
                                 f'epoch time: {timeit.time.perf_counter() - epoch_start:.2f}s'))
+        # ========== end eval code ==========
 
+        # visualize latent space
         if args.visualize_emb and epoch % args.visualize_emb == 0:
-            visualize_data(np.array(test_concat_embs), test_true_labels, N_CLASS,
+            visualize_data(np.array(test_embs), test_true_labels, N_CLASS,
                            os.path.join(args.results_path, 'visualization', f'joint_training_emb_epoch{epoch}.png'))
 
         # early stop
         if test_acc > best_score:
             not_improving_step = 0
             logger.info(get_log_str(args, f'★ SCORE IMPROVED FROM {best_score:.5f} TO {test_acc:.5f}'))
-            try_to_save_model(args, model, os.path.join(args.results_path, 'Dual_CSA.pt'))
+            try_to_save_model(args, model, os.path.join(args.results_path, f'{args.network}.pt'))
             best_score = test_acc
         else:
             not_improving_step += 1
@@ -274,58 +316,52 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
             else:
                 logger.info(get_log_str(args, f'* best: {best_score}, NOT IMPROVING STEP: {not_improving_step}'))
 
-    logger.info(get_log_str(args,  f'END JOINT TRAINING ON NODE {args.node}, '
-                                   f'RANK: {args.rank}, TIME: {timeit.time.perf_counter() - joint_train_start:.2f}s'))
+    logger.info(get_log_str(args, f'END JOINT TRAINING ON NODE {args.node}, '
+                                  f'RANK {args.rank}, TIME: {timeit.time.perf_counter() - joint_train_start:.2f}s'))
 
 
-def test_predict(args, model, test_loader, loss_weight=[1, 1, 1], device=None):
-    logger.info(get_log_str(args, 'test_predict...'))
+def test_predict(args, model, test_loader, loss_weight=None, device=None):
+    logger.info(get_log_str(args, f'test_predict..., loss weight: {loss_weight}'))
     predict_start = timeit.time.perf_counter()
-    torch.cuda.empty_cache()
+
     model.eval()
-    model.module.pretrain = False
-    total_n_corrects = 0
+    model.module.set_pretrained(True) if args.multiprocessing_distributed else model.set_pretrained(True)
+    recon_criterion = nn.MSELoss()
+    cls_criterion = nn.KLDivLoss(reduction='batchmean') \
+        if args.network in ['Dual_CSA', 'CSA_RP', 'CSA_FS'] else nn.CrossEntropyLoss()
+
     with torch.no_grad():
-        alpha, beta, gamma = loss_weight
-        recon_criterion = nn.MSELoss()
-        if args.network == 'Dual_CSA':
-            classification_criterion = nn.KLDivLoss(reduction='batchmean')
-        elif args.network == 'Dual_CA_Softmax':
-            classification_criterion = nn.CrossEntropyLoss()
-        test_losses = []
+        n_test_pred_correct = 0
+        n_total_test_samples = 0
+        accum_test_loss = 0
         pred_labels = []
         true_labels = []
         concat_embs = []
         for batch_idx, (RP, FS, true_label) in enumerate(test_loader):
-            RP, FS, true_label = RP.to(device), FS.to(device), true_label.to(device)
-            RP_recon, soft_label, FS_recon, concat_emb = model(RP, FS)
-            concat_embs.extend(concat_emb.cpu().numpy().tolist())
-            RP_recon_loss = recon_criterion(RP_recon, RP)
-            if args.network == 'Dual_CSA':
-                classification_loss = classification_criterion(torch.log(soft_label).float(), true_label)
-            elif args.network == 'Dual_CA_Softmax':
-                classification_loss = classification_criterion(soft_label.float(), true_label)
-            FS_recon_loss = recon_criterion(FS_recon, FS)
-            total_loss = alpha * RP_recon_loss + beta * classification_loss + gamma * FS_recon_loss
-            test_losses.append(total_loss.item())
-            pred = soft_label.argmax(dim=1, keepdim=True)
+            outputs, recon_loss, cls_loss, combine_loss = \
+                joint_training_do_forward(args, model, {'RP': RP, 'FS': FS, 'true_label': true_label},
+                                          recon_criterion, cls_criterion, loss_weight, device)
+
+            concat_embs.extend(outputs['emb'].cpu().numpy().tolist())
+            accum_test_loss += combine_loss.item() * len(RP)
+            pred = outputs['pred'].argmax(dim=1, keepdim=True)
             pred_labels.extend(pred.tolist())
             true_label = true_label.argmax(dim=1, keepdim=True)
             true_labels.extend(true_label.tolist())
             n_corrects = pred.eq(true_label).sum().item()
-            total_n_corrects += n_corrects
+            n_test_pred_correct += n_corrects
+            n_total_test_samples += len(RP)
 
-        test_loss = np.average(test_losses)
-        test_acc = total_n_corrects / len(test_loader.dataset)
+        test_loss = accum_test_loss / n_total_test_samples
+        test_acc = n_test_pred_correct / n_total_test_samples
         logger.info(get_log_str(args, f'==> ' +
-                                f'avg test_loss: {test_loss:.5f}, '
+                                f'test_loss: {test_loss:.5f}, '
                                 f'test_acc: {test_acc:.5f}'))
+        logger.info(get_log_str(args, f'END TEST PREDICTING ON NODE {args.node}, '
+                                      f'RANK {args.rank}, TIME: {timeit.time.perf_counter() - predict_start:.2f}s'))
         if args.visualize_emb:
             visualize_data(np.array(concat_embs), true_labels, N_CLASS,
                            os.path.join(args.results_path, 'visualization', 'emb_optimal.png'))
-        logger.info(get_log_str(args, f'END TEST PREDICTING ON NODE {args.node}, '
-                                      f'RANK: {args.rank}, TIME: {timeit.time.perf_counter() - predict_start:.2f}s'))
-
         show_classification_results(args, pred_labels, true_labels)
 
 
@@ -334,7 +370,7 @@ def show_classification_results(args, y_pred, y_true, label_names=['walk', 'bike
                                                 and args.rank % args.ngpus_per_node == 0):
         logger.info(get_log_str(args, 'show_classification_results:'))
         cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)
-        re = classification_report(y_true, y_pred, target_names=['walk', 'bike', 'bus', 'driving', 'train/subway'],
+        re = classification_report(y_true, y_pred, target_names=label_names,
                                    digits=5)
         logger.info(get_log_str(args, f'confusion_matrix:\n{str(cm)}'))
         logger.info(get_log_str(args, f'classification_report:\n{str(re)}'))
@@ -393,6 +429,12 @@ def main_worker(proc, ngpus_per_node, args):
         model = Dual_CSA(args.n_features, args.RP_emb_dim, args.FS_emb_dim, centroid)
     elif args.network == 'Dual_CA_Softmax':
         model = Dual_CA_Softmax(args.n_features, args.RP_emb_dim, args.FS_emb_dim)
+    elif args.network == 'CSA_RP':
+        model = CSA_RP(args.n_features, args.RP_emb_dim, centroid)
+        assert args.RP_emb_dim == centroid.shape[1]
+    elif args.network == 'CSA_FS':
+        model = CSA_RP(args.n_features, args.FS_emb_dim, centroid)
+        assert args.FS_emb_dim == centroid.shape[1]
 
     if not torch.cuda.is_available():
         logger.warning(get_log_str(args, 'using CPU, this will be slow'))
@@ -444,7 +486,7 @@ def main_worker(proc, ngpus_per_node, args):
 
     # start training or evaluating
     if args.evaluate:
-        model = load_saved_model(args, os.path.join(args.results_path, 'Dual_CSA.pt'), model)
+        model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
         test_predict(args, model, test_loader, [args.alpha, args.beta, args.gamma], device)
         cleanup(args)
         return
@@ -452,9 +494,9 @@ def main_worker(proc, ngpus_per_node, args):
     if args.pretrained:
         # if pretrained, carry on joint training.
         # here we also load Dual_CSA.pt to continue joint training Dual_CSA (if existed)
-        if os.path.exists(os.path.join(args.results_path, 'Dual_CSA.pt')):
-            logger.info(get_log_str(args, f'Dual_CSA.pt exists, continue joint training from last time!'))
-            model = load_saved_model(args, os.path.join(args.results_path, 'Dual_CSA.pt'), model)
+        if os.path.exists(os.path.join(args.results_path, f'{args.network}.pt')):
+            logger.info(get_log_str(args, f'{args.network}.pt exists, continue joint training from last time!'))
+            model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
         else:
             # load best pretrained model to joint train
             model = load_saved_model(args, os.path.join(args.results_path, 'pretrained_AE.pt'), model)
@@ -473,7 +515,7 @@ def main_worker(proc, ngpus_per_node, args):
                         device)
     if not args.only_pre:
         # load best Dual_CSA model to predict
-        model = load_saved_model(args, os.path.join(args.results_path, 'Dual_CSA.pt'), model)
+        model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
         test_predict(args, model, test_loader, [args.alpha, args.beta, args.gamma], device)
     cleanup(args)
 
@@ -486,7 +528,6 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', default=ALPHA, type=float)
     parser.add_argument('--beta', default=BETA, type=float)
     parser.add_argument('--gamma', default=GAMMA, type=float)
-    parser.add_argument('--n-channels', default=N_CLASS, type=float)
     parser.add_argument('--RP-emb-dim', type=int)
     parser.add_argument('--FS-emb-dim', type=int)
     parser.add_argument('--patience', type=int, default=15)
@@ -494,8 +535,8 @@ if __name__ == '__main__':
     parser.add_argument('--no-joint', action='store_true')
     parser.add_argument('--only-pre', action='store_true')
     parser.add_argument('--no-save-model', action='store_true')
-    parser.add_argument('--visualize-emb', type=int, default=5)
-    parser.add_argument('--n-features', type=int, default=5)
+    parser.add_argument('--visualize-emb', type=int, default=0)
+    parser.add_argument('--n-features', type=int, default=N_CLASS)
 
     parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')

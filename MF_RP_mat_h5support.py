@@ -149,7 +149,7 @@ if __name__ == '__main__':
     logger.info(f'n_thread:{n_thread}')
     pool = multiprocessing.Pool(processes=1)
 
-    parser = argparse.ArgumentParser(description='RP_mat')
+    parser = argparse.ArgumentParser(description='RP')
     parser.add_argument('--dim', default=DIM, type=int)
     parser.add_argument('--tau', default=TAU, type=int)
     parser.add_argument('--multi_feature_segs_path', type=str, required=True)

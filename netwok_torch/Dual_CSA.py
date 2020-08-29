@@ -1,5 +1,3 @@
-from typing import Optional, Union
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -48,29 +46,32 @@ class PCC_Layer(nn.Module):
 
 
 class Dual_CSA(nn.Module):
-    def __init__(self, n_channels, RP_emb_dim, FS_emb_dim, centroid, pretrain=True):
+    def __init__(self, n_channels, RP_emb_dim, FS_emb_dim, centroid, pretrained=False):
         super(Dual_CSA, self).__init__()
         self.RP_AE = Conv2D_AE(n_channels, RP_emb_dim)
         self.FS_AE = Conv1D_AE(n_channels, FS_emb_dim)
         self.centroid = centroid
         self.PCC = PCC_Layer(self.centroid, 1)
-        self.pretrain = pretrain
+        self.pretrained = pretrained
+
+    def set_pretrained(self, petrained):
+        self.pretrained = petrained
 
     def cuda(self, device=None):
         self.centroid = self.centroid.cuda(device)
         self.PCC = PCC_Layer(self.centroid, 1)
         return super().cuda(device)
 
-    def forward(self, RP_mat, FS):
-        RP_recon, RP_emb = self.RP_AE(RP_mat)
+    def forward(self, RP, FS):
+        RP_recon, RP_emb = self.RP_AE(RP)
         FS_recon, FS_emb = self.FS_AE(FS)
-        if not self.pretrain:
+        if self.pretrained:
             concat_emb = torch.cat((RP_emb, FS_emb), dim=1)
             soft_label = self.PCC(concat_emb)
         else:
             soft_label = None
             concat_emb = None
-        return RP_recon, soft_label, FS_recon, concat_emb
+        return {'recon_ori': [(RP_recon, RP), (FS_recon, FS)], 'pred': soft_label, 'emb:': concat_emb}
 
 
 if __name__ == '__main__':
@@ -81,6 +82,6 @@ if __name__ == '__main__':
          [4, 4, 4, 4]]
     )
     model = Dual_CSA(5, 2, 2, ces)
-    model.pretrain = False
+    model.pretrained = False
     print(model)
     summary(model, [(5, 184, 184), (5, 200)])

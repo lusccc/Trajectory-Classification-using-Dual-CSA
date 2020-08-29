@@ -12,23 +12,22 @@ from netwok_torch.Conv2D_AE import Conv2D_AE
 
 
 class Dual_CA_Softmax(nn.Module):
-    def __init__(self, n_channels, RP_emb_dim, FS_emb_dim, pretrain=True):
+    def __init__(self, n_channels, RP_emb_dim, FS_emb_dim, pretrained=False):
         super(Dual_CA_Softmax, self).__init__()
         self.RP_AE = Conv2D_AE(n_channels, RP_emb_dim)
         self.FS_AE = Conv1D_AE(n_channels, FS_emb_dim)
-        self.softmax = nn.Softmax()
-        self.pretrain = pretrain
+        # note: softmax is contained in n.CrossEntropyLoss(), here we dont need to do this
+        # self.softmax = nn.Softmax()
+        self.pretrained = pretrained
 
+    def set_pretrained(self, petrained):
+        self.pretrained = petrained
 
     def forward(self, RP_mat, FS):
         RP_recon, RP_emb = self.RP_AE(RP_mat)
         FS_recon, FS_emb = self.FS_AE(FS)
-        if not self.pretrain:
-            concat_emb = torch.cat((RP_emb, FS_emb), dim=1)
-            soft_label = self.softmax(concat_emb)
-        else:
-            soft_label = None
-        return RP_recon, soft_label, FS_recon
+        concat_emb = torch.cat((RP_emb, FS_emb), dim=1) if self.pretrained else None
+        return {'recon': [RP_recon, FS_recon], 'pred': concat_emb, 'emb:': concat_emb}
 
 
 if __name__ == '__main__':

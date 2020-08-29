@@ -12,11 +12,16 @@
 
 
 python network_training.py --dataset geolife --results-path ./results/geolife_pretrained_emb304 --alpha 1 --beta 11 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 330
-python ./PEDCC.py --save_dir ./data/geolife_features --dim 304
+python ./PEDCC.py --save_dir ./data/geolife_features --dim 448
 
 
 for i in $(seq 0 1 9); do
   echo ${i}
 done
 
+
+path="./results/SHL_featuretest_exp0"
+mkdir -p ${path}
+export RES_PATH=${path}
+python network_training.py --dataset SHL --results-path ${path} --alpha 1 --beta 11 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --gpu 0 --world-size 1 --rank 0 -b 330 --n-features ${n_features} --visualize-emb 0
 
