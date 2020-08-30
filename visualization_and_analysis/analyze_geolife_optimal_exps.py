@@ -13,4 +13,4 @@ for i in range(5):
     acc = float(lines[-2][36:43])  # Penultimate line, and only cut acc value
     total_accs.append(acc)
 mean_acc = np.mean(total_accs, axis=0)
-print(mean_acc) #0.887856
+print(mean_acc) #0.879904

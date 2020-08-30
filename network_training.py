@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 import torch.multiprocessing as mp
 import dataset_factory
 from netwok_torch.Dual_CSA import Dual_CSA
+from network_variant.CSA_FS import CSA_FS
 from network_variant.CSA_RP import CSA_RP
 from network_variant.Dual_CA_Softmax import Dual_CA_Softmax
 from params import *
@@ -96,8 +97,8 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
 
     best_score = inf
     not_improving_step = 0
-
-    for epoch in range(args.start_epoch, args.epochs, ):
+    # TODO：
+    for epoch in range(0, args.pretrain_epochs, ):
         epoch_start = timeit.time.perf_counter()
 
         accum_train_loss = 0
@@ -188,7 +189,9 @@ def joint_training_do_forward(args, model, inputs, recon_criterion, cls_criterio
 
     # note: recon_loss is a list
     recon_loss = [recon_criterion(*recon_ori) for recon_ori in outputs['recon_ori']]
-    cls_loss = cls_criterion(torch.log(outputs['pred']).float(), inputs['true_label']) if args.network == 'Dual_CSA' \
+    cls_loss = cls_criterion(torch.log(outputs['pred']).float(), inputs['true_label']) if args.network in ['Dual_CSA',
+                                                                                                           'CSA_RP',
+                                                                                                           'CSA_FS'] \
         else cls_criterion(outputs['pred'].float(), inputs['true_label'].argmax(dim=1, keepdim=True).view(-1))
 
     if args.network in ['Dual_CSA', 'Dual_CA_Softmax']:
@@ -213,8 +216,8 @@ def joint_train_do_forward_backward(args, optimizer, model, inputs, recon_criter
     return outputs, recon_loss, cls_loss, combine_loss
 
 
-def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss_weight=None, device=None):
-    logger.info(get_log_str(args, f'joint training..., loss weight: {loss_weight}'))
+def joint_train(args, model, train_loader, test_loader, train_sampler=None, device=None):
+    logger.info(get_log_str(args, f'joint training...'))
     joint_train_start = timeit.time.perf_counter()
 
     model.module.set_pretrained(True) if args.multiprocessing_distributed else model.set_pretrained(True)
@@ -227,7 +230,15 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
     best_score = 0
     not_improving_step = 0
 
-    for epoch in range(args.start_epoch, args.epochs, ):
+    alpha, beta, gamma = 1, 32, 1
+    logger.info(f'initial loss weight: {alpha, beta, gamma}')
+
+    for epoch in range(0, args.joint_train_epochs,):
+        if not_improving_step >= 4 and not_improving_step % 4 == 0 and beta / 2 >= 8:
+            beta /= 2
+            logger.debug(f'dynamic loss_weight beta: {beta}')
+
+        loss_weight = [alpha, beta, gamma]
         epoch_start = timeit.time.perf_counter()
 
         n_train_pred_correct = 0
@@ -252,6 +263,7 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
                                                 cls_criterion, loss_weight, device)
             accum_train_loss += combine_loss.item() * len(RP)
             pred = outputs['pred'].argmax(dim=1, keepdim=True)
+            true_label = true_label.to(device)
             true_label = true_label.argmax(dim=1, keepdim=True)
             n_train_pred_correct += pred.eq(true_label).sum().item()
             n_total_train_samples += len(RP)
@@ -260,7 +272,7 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
                 logger.info(get_log_str(args, f'Train Epoch: {epoch}, '
                                               f'[{batch_idx + 1:>{align_width}}'
                                               f'/{len(train_loader):>{align_width}}], '
-                                              f'recon_loss: {[los.item() for los in recon_loss]:.6f}, '  # list
+                                              f'recon_loss: {[los.item() for los in recon_loss]}, '  # list
                                               f'cls_loss: {cls_loss.item():.6f}, '
                                               f'combine_loss: {combine_loss.item():.6f}, '
                                               f'batch time: {timeit.time.perf_counter() - batch_start:.2f}s'))
@@ -279,6 +291,7 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
                 accum_test_loss += combine_loss.item() * len(RP)
                 pred = outputs['pred'].argmax(dim=1, keepdim=True)
                 true_label = true_label.argmax(dim=1, keepdim=True)
+                true_label = true_label.to(device)
                 test_true_labels.extend(true_label.tolist())
                 n_test_pred_correct += pred.eq(true_label).sum().item()
                 n_total_test_samples += len(RP)
@@ -320,8 +333,8 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, loss
                                   f'RANK {args.rank}, TIME: {timeit.time.perf_counter() - joint_train_start:.2f}s'))
 
 
-def test_predict(args, model, test_loader, loss_weight=None, device=None):
-    logger.info(get_log_str(args, f'test_predict..., loss weight: {loss_weight}'))
+def test_predict(args, model, test_loader, device=None):
+    logger.info(get_log_str(args, f'test_predict...'))
     predict_start = timeit.time.perf_counter()
 
     model.eval()
@@ -340,12 +353,13 @@ def test_predict(args, model, test_loader, loss_weight=None, device=None):
         for batch_idx, (RP, FS, true_label) in enumerate(test_loader):
             outputs, recon_loss, cls_loss, combine_loss = \
                 joint_training_do_forward(args, model, {'RP': RP, 'FS': FS, 'true_label': true_label},
-                                          recon_criterion, cls_criterion, loss_weight, device)
+                                          recon_criterion, cls_criterion, [1, 1, 1], device)
 
             concat_embs.extend(outputs['emb'].cpu().numpy().tolist())
             accum_test_loss += combine_loss.item() * len(RP)
             pred = outputs['pred'].argmax(dim=1, keepdim=True)
             pred_labels.extend(pred.tolist())
+            true_label = true_label.to(device)
             true_label = true_label.argmax(dim=1, keepdim=True)
             true_labels.extend(true_label.tolist())
             n_corrects = pred.eq(true_label).sum().item()
@@ -433,7 +447,7 @@ def main_worker(proc, ngpus_per_node, args):
         model = CSA_RP(args.n_features, args.RP_emb_dim, centroid)
         assert args.RP_emb_dim == centroid.shape[1]
     elif args.network == 'CSA_FS':
-        model = CSA_RP(args.n_features, args.FS_emb_dim, centroid)
+        model = CSA_FS(args.n_features, args.FS_emb_dim, centroid)
         assert args.FS_emb_dim == centroid.shape[1]
 
     if not torch.cuda.is_available():
@@ -487,36 +501,48 @@ def main_worker(proc, ngpus_per_node, args):
     # start training or evaluating
     if args.evaluate:
         model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
-        test_predict(args, model, test_loader, [args.alpha, args.beta, args.gamma], device)
+        test_predict(args, model, test_loader, device)
         cleanup(args)
         return
 
-    if args.pretrained:
-        # if pretrained, carry on joint training.
-        # here we also load Dual_CSA.pt to continue joint training Dual_CSA (if existed)
-        if os.path.exists(os.path.join(args.results_path, f'{args.network}.pt')):
-            logger.info(get_log_str(args, f'{args.network}.pt exists, continue joint training from last time!'))
-            model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
+    logger.info(get_log_str(args, f'conduct {args.training_strategy}!'))
+    if args.training_strategy == 'normal_training' or args.training_strategy == 'normal_only_pretraining':
+        if args.pretrained:
+            # if pretrained, carry on joint training.
+            # here we also load Dual_CSA.pt to continue joint training Dual_CSA (if existed)
+            if os.path.exists(os.path.join(args.results_path, f'{args.network}.pt')):
+                logger.info(get_log_str(args, f'{args.network}.pt exists, continue joint training from last time!'))
+                model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
+            else:
+                # load best pretrained model to joint train
+                model = load_saved_model(args, os.path.join(args.results_path, 'pretrained_AE.pt'), model)
+            joint_train(args, model, train_loader, test_loader, train_sampler, device)
         else:
+            # not pretrained, carry on pretrain and joint training in order.
+            # here we also load pretrained_AE.pt to continue pretraining (if existed)
+            if os.path.exists(os.path.join(args.results_path, 'pretrained_AE.pt')):
+                logger.info(get_log_str(args, f'pretrained_AE.pt exists, continue pretraining from last time!'))
+                model = load_saved_model(args, os.path.join(args.results_path, 'pretrained_AE.pt'), model)
+            pretrain(args, model, train_loader, test_loader, train_sampler, device)
             # load best pretrained model to joint train
             model = load_saved_model(args, os.path.join(args.results_path, 'pretrained_AE.pt'), model)
-        joint_train(args, model, train_loader, test_loader, train_sampler, [args.alpha, args.beta, args.gamma], device)
-    else:
-        # not pretrained, carry on pretrain and joint training in order.
-        # here we also load pretrained_AE.pt to continue pretraining (if existed)
-        if os.path.exists(os.path.join(args.results_path, 'pretrained_AE.pt')):
-            logger.info(get_log_str(args, f'pretrained_AE.pt exists, continue pretraining from last time!'))
-            model = load_saved_model(args, os.path.join(args.results_path, 'pretrained_AE.pt'), model)
-        pretrain(args, model, train_loader, test_loader, train_sampler, device)
-        # load best pretrained model to joint train
-        model = load_saved_model(args, os.path.join(args.results_path, 'pretrained_AE.pt'), model)
-        if not args.only_pre:
-            joint_train(args, model, train_loader, test_loader, train_sampler, [args.alpha, args.beta, args.gamma],
-                        device)
-    if not args.only_pre:
-        # load best Dual_CSA model to predict
+            if not args.training_strategy == 'normal_only_pretraining':
+                joint_train(args, model, train_loader, test_loader, train_sampler, device)
+        if not args.training_strategy == 'normal_only_pretraining':
+            # load best Dual_CSA model to predict
+            model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
+            test_predict(args, model, test_loader, device)
+    # elif args.training_strategy == 'no_pre_joint_training':
+    #     # directly using PCC layer to classification, loss weight ==> 0, 1, 0
+    #     joint_train(args, model, train_loader, test_loader, train_sampler, [0, 1, 0], device)
+    #     # load best model to predict
+    #     model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
+    #     test_predict(args, model, test_loader, [0, 1, 0], device)
+    elif args.training_strategy == 'only_joint_training':
+        joint_train(args, model, train_loader, test_loader, train_sampler,  device)
+        # load best model to predict
         model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
-        test_predict(args, model, test_loader, [args.alpha, args.beta, args.gamma], device)
+        test_predict(args, model, test_loader, device)
     cleanup(args)
 
 
@@ -525,25 +551,20 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, required=True)
     parser.add_argument('--network', type=str, default='Dual_CSA')
     parser.add_argument('--results-path', default='./results/default', type=str)
-    parser.add_argument('--alpha', default=ALPHA, type=float)
-    parser.add_argument('--beta', default=BETA, type=float)
-    parser.add_argument('--gamma', default=GAMMA, type=float)
     parser.add_argument('--RP-emb-dim', type=int)
     parser.add_argument('--FS-emb-dim', type=int)
     parser.add_argument('--patience', type=int, default=15)
-    parser.add_argument('--no-pre', action='store_true')
-    parser.add_argument('--no-joint', action='store_true')
-    parser.add_argument('--only-pre', action='store_true')
+    parser.add_argument('--training-strategy', type=str, default='normal_training')
     parser.add_argument('--no-save-model', action='store_true')
     parser.add_argument('--visualize-emb', type=int, default=0)
     parser.add_argument('--n-features', type=int, default=N_CLASS)
 
     parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
-    parser.add_argument('--epochs', default=3000, type=int, metavar='N',
-                        help='number of total epochs to run')
-    parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
-                        help='manual epoch number (useful on restarts)')
+    parser.add_argument('--pretrain-epochs', default=20, type=int, metavar='N',
+                        help='number of pretraining epochs to run')
+    parser.add_argument('--joint-train-epochs', default=3000, type=int, metavar='N',
+                        help='number of joint training epochs to run')
     parser.add_argument('-b', '--batch-size', default=256, type=int,
                         metavar='N',
                         help='mini-batch size (default: 256), this is the total '

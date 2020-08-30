@@ -71,7 +71,7 @@ class Dual_CSA(nn.Module):
         else:
             soft_label = None
             concat_emb = None
-        return {'recon_ori': [(RP_recon, RP), (FS_recon, FS)], 'pred': soft_label, 'emb:': concat_emb}
+        return {'recon_ori': [(RP_recon, RP), (FS_recon, FS)], 'pred': soft_label, 'emb': concat_emb}
 
 
 if __name__ == '__main__':

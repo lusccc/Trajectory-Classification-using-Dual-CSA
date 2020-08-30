@@ -29,7 +29,7 @@ class CSA_RP(nn.Module):
     def forward(self, RP):
         RP_recon, RP_emb = self.RP_AE(RP)
         soft_label = self.PCC(RP_emb) if self.pretrained else None
-        return {'recon_ori': [(RP_recon, RP), ], 'pred': soft_label, 'emb': {RP_emb}}
+        return {'recon_ori': [(RP_recon, RP), ], 'pred': soft_label, 'emb': RP_emb}
 
 
 if __name__ == '__main__':

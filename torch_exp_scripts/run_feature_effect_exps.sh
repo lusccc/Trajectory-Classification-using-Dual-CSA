@@ -2,7 +2,7 @@
 cd ..
 features=("3" "4" "7" "3,4" "3,7" "4,7" "3,4,7" "3,4,7,8" "3,4,7,8,9")
 for i in $(seq 0 1 8); do
-  path="./results/SHL_feature${features[${i}]}_exp0"
+  path="./results/new_SHL_feature${features[${i}]}_exp0"
   mkdir -p ${path}
   export RES_PATH=${path}
   python ./trajectory_segmentation_and_features_extraction.py --trjs_path ./data/SHL_extracted/trjs_train.npy --labels_path ./data/SHL_extracted/labels_train.npy --seg_size 200 --data_type train --save_dir ./data/SHL_features --feature_set ${features[${i}]}
@@ -23,6 +23,6 @@ for i in $(seq 0 1 8); do
     n_features=5
   fi
 #  python network_training.py --dataset SHL --results-path ${path} --alpha 1 --beta 11 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 330 --n-features ${n_features} --visualize-emb 0
-  python network_training.py --dataset SHL --results-path ${path} --alpha 1 --beta 11 --gamma 1 --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --gpu 0 --world-size 1 --rank 0 -b 240 --n-features ${n_features}
+  python network_training.py --dataset SHL --results-path ${path}  --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed  --world-size 1 --rank 0 -b 390 --n-features ${n_features}
 
 done

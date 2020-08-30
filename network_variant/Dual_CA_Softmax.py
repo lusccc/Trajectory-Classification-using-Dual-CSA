@@ -23,11 +23,11 @@ class Dual_CA_Softmax(nn.Module):
     def set_pretrained(self, petrained):
         self.pretrained = petrained
 
-    def forward(self, RP_mat, FS):
-        RP_recon, RP_emb = self.RP_AE(RP_mat)
+    def forward(self, RP, FS):
+        RP_recon, RP_emb = self.RP_AE(RP)
         FS_recon, FS_emb = self.FS_AE(FS)
         concat_emb = torch.cat((RP_emb, FS_emb), dim=1) if self.pretrained else None
-        return {'recon': [RP_recon, FS_recon], 'pred': concat_emb, 'emb:': concat_emb}
+        return {'recon_ori': [(RP_recon, RP), (FS_recon, FS)], 'pred': concat_emb, 'emb': concat_emb}
 
 
 if __name__ == '__main__':

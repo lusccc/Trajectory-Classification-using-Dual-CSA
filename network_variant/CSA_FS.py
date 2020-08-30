@@ -13,7 +13,7 @@ from netwok_torch.Dual_CSA import PCC_Layer
 class CSA_FS(nn.Module):
     def __init__(self, n_channels, FS_emb_dim, centroid, pretrained=False):
         super(CSA_FS, self).__init__()
-        self.FS_AE = Conv2D_AE(n_channels, FS_emb_dim)
+        self.FS_AE = Conv1D_AE(n_channels, FS_emb_dim)
         self.centroid = centroid
         self.PCC = PCC_Layer(self.centroid, 1)
         self.pretrained = pretrained
@@ -29,7 +29,7 @@ class CSA_FS(nn.Module):
     def forward(self, FS):
         FS_recon, FS_emb = self.FS_AE(FS)
         soft_label = self.PCC(FS_emb) if self.pretrained else None
-        return {'recon_ori': [(FS_recon, FS), ], 'pred': soft_label, 'emb': {FS_emb}}
+        return {'recon_ori': [(FS_recon, FS), ], 'pred': soft_label, 'emb': FS_emb}
 
 
 if __name__ == '__main__':
@@ -42,4 +42,4 @@ if __name__ == '__main__':
     model = CSA_FS(5, 4, ces)
     model.pretrain = False
     print(model)
-    summary(model, (5, 184, 184))
+    summary(model, (5, 200))
