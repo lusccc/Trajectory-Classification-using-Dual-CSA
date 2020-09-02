@@ -18,7 +18,7 @@ def read_res_acc(folder_prefix):
     accs = []
     for i in range(8, dim_limit, 8):
         exp_path = os.path.join(res_path, f'{folder_prefix}{i}')
-        log_path = os.path.join(exp_path, 'lines.txt')
+        log_path = os.path.join(exp_path, 'log.txt')
         log = open(log_path, encoding='utf-8').readlines()
         acc = float(log[-2][57:])  # Penultimate line, and only cut acc value
         accs.append(acc)
@@ -38,7 +38,7 @@ acc_exp10 = read_res_acc('exp10th_SHL_t7s3e')
 
 all_acc = np.array(
     [acc_exp1, acc_exp2, acc_exp3, acc_exp4,
-     acc_exp5, acc_exp6, acc_exp7, acc_exp8, acc_exp9, acc_exp10]
+     acc_exp5, acc_exp6, acc_exp7, acc_exp8,  acc_exp10]
 )
 mean_acc = np.mean(all_acc, axis=0)
 
@@ -81,7 +81,7 @@ def show_bar_chart():
     plt.xticks(xi, x, fontsize=8, rotation=60)
     for bar in bars:
         yval = bar.get_height()
-        plt.text(bar.get_x() + 0.2, yval, '%.10f' % yval, va='top', fontsize=8, rotation=90, color='w')
+        plt.text(bar.get_x() + 0.2, yval, '%.5f' % yval, va='top', fontsize=8, rotation=90, color='w')
     bars[np.argmax(y)].set_color('r')
     # plt.legend()
     plt.show()

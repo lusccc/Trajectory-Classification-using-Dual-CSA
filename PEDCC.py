@@ -99,9 +99,4 @@ if __name__ == '__main__':
             print('saving single pedcc')
             np.save(f'{save_dir}/pedcc.npy', c)
 
-    # features = np.load(features_path)
-    # n = features.shape[0]
-    # # !!those data are generated, no real trajectory data involved!!
-    # centroid = pedcc.repeat(c, n, scale)
-    # print('saving repeated pedcc')
-    # np.save(f'{save_dir}/centroids_{data_type}.npy', centroid)
+    print()

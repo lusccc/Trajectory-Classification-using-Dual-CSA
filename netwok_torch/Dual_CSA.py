@@ -65,12 +65,8 @@ class Dual_CSA(nn.Module):
     def forward(self, RP, FS):
         RP_recon, RP_emb = self.RP_AE(RP)
         FS_recon, FS_emb = self.FS_AE(FS)
-        if self.pretrained:
-            concat_emb = torch.cat((RP_emb, FS_emb), dim=1)
-            soft_label = self.PCC(concat_emb)
-        else:
-            soft_label = None
-            concat_emb = None
+        concat_emb = torch.cat((RP_emb, FS_emb), dim=1)
+        soft_label = self.PCC(concat_emb) if self.pretrained else None
         return {'recon_ori': [(RP_recon, RP), (FS_recon, FS)], 'pred': soft_label, 'emb': concat_emb}
 
 
@@ -82,6 +78,6 @@ if __name__ == '__main__':
          [4, 4, 4, 4]]
     )
     model = Dual_CSA(5, 2, 2, ces)
-    model.pretrained = False
+    model.pretrained = True
     print(model)
     summary(model, [(5, 184, 184), (5, 200)])

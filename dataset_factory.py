@@ -11,6 +11,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from logzero import logger
+
 pathlib.Path(os.environ['RES_PATH']).mkdir(parents=True, exist_ok=True)
 logzero.logfile(os.path.join(os.environ['RES_PATH'], 'log.txt'), backupCount=3)
 
@@ -49,11 +50,15 @@ class Trajectory_Feature_Dataset(Dataset):
 
 
 def calc_RP_data_mean_std(dataset_name, data_type, use_gpu=False):
-    if os.path.exists(f'./data/{dataset_name}_features/mean.npy') and os.path.exists(f'./data/{dataset_name}_features/std.npy'):
-        mean, std = np.load(f'./data/{dataset_name}_features/mean.npy'), np.load(f'./data/{dataset_name}_features/std.npy')
+    # TODO: only use train set to calc mean std, though currently indeed use train set, we should make it clear in code
+    if os.path.exists(f'./data/{dataset_name}_features/mean.npy') and os.path.exists(
+            f'./data/{dataset_name}_features/std.npy'):
+        mean, std = np.load(f'./data/{dataset_name}_features/mean.npy'), np.load(
+            f'./data/{dataset_name}_features/std.npy')
         logger.info(f'loading calculated mean and std from file, mean: {mean}, std: {std}')
         return mean, std
     logger.info(f'calc_RP_data_mean_std for {dataset_name}...')
+
     class RP_Data(Dataset):
         def __init__(self, dataset_name, data_type):
             self.dataset_name = dataset_name
@@ -61,7 +66,8 @@ def calc_RP_data_mean_std(dataset_name, data_type, use_gpu=False):
                 f'./data/{self.dataset_name}_features/multi_channel_RP_mats_{data_type}.h5',
                 mode='r')
             self.multi_channel_RP_mats = self.multi_channel_RP_mats_h5_file.get_node('/' + H5_NODE_NAME)
-            # logger.info(self.multi_channel_RP_mats.shape)
+            logger.info(self.multi_channel_RP_mats.shape)
+            self.n_channels = self.multi_channel_RP_mats.shape[1]
 
         def __len__(self):
             return self.multi_channel_RP_mats.shape[0]
@@ -94,7 +100,7 @@ def calc_RP_data_mean_std(dataset_name, data_type, use_gpu=False):
     nb_samples = 0.
     for data in dataset:
         data = data.to(device)
-        var += ((data.view(5, -1) - mean.unsqueeze(1)) ** 2).sum(dim=1)
+        var += ((data.view(dataset.n_channels, -1) - mean.unsqueeze(1)) ** 2).sum(dim=1)
         nb_samples += np.prod(data.size()[1:])  # width*height
     std = torch.sqrt(var / nb_samples)
     logger.info(f"Std:{std}")

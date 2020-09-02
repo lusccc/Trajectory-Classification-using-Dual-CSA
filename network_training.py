@@ -97,7 +97,22 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
 
     best_score = inf
     not_improving_step = 0
-    # TODO：
+
+    if args.visualize_emb:
+        model.eval()
+        with torch.no_grad():
+            test_embs = []
+            test_true_labels = []
+            for RP, FS, true_label in test_loader:
+                outputs, loss = pretrain_do_forward(args, model, {'RP': RP, 'FS': FS}, recon_criterion, device)
+                test_embs.extend(outputs['emb'].cpu().numpy().tolist())
+                true_label = true_label.argmax(dim=1, keepdim=True)
+                true_label = true_label.to(device)
+                test_true_labels.extend(true_label.tolist())
+
+            visualize_data(np.array(test_embs), test_true_labels, N_CLASS,
+                           os.path.join(args.results_path, 'visualization', f'pretrain_init_emb.png'))
+
     for epoch in range(0, args.pretrain_epochs, ):
         epoch_start = timeit.time.perf_counter()
 
@@ -130,8 +145,14 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
         # ========== eval code ==========
         model.eval()
         with torch.no_grad():
-            for RP, FS, _ in test_loader:
+            test_embs = []
+            test_true_labels = []
+            for RP, FS, true_label in test_loader:
                 outputs, loss = pretrain_do_forward(args, model, {'RP': RP, 'FS': FS}, recon_criterion, device)
+                test_embs.extend(outputs['emb'].cpu().numpy().tolist())
+                true_label = true_label.argmax(dim=1, keepdim=True)
+                true_label = true_label.to(device)
+                test_true_labels.extend(true_label.tolist())
                 n_total_test_samples += len(RP)
                 accum_test_loss += loss.item() * len(RP)
 
@@ -159,18 +180,10 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
                 logger.info(get_log_str(args, f'* best: {best_score}, NOT IMPROVING STEP: {not_improving_step}'))
         # end early stop
 
-    if args.visualize_emb:
-        model = load_saved_model(args, os.path.join(args.results_path, 'pretrained_AE.pt'), model)
-        model.eval()
-        with torch.no_grad():
-            test_embs = []
-            test_true_labels = []
-            for RP, FS, true_label in test_loader:
-                outputs, loss = pretrain_do_forward(args, model, {'RP': RP, 'FS': FS}, recon_criterion, device)
-                test_embs.extend(outputs['emb'].cpu().numpy().tolist())
-                test_true_labels.extend(true_label.tolist())
-        visualize_data(np.array(test_embs), test_true_labels, N_CLASS,
-                       os.path.join(args.results_path, 'visualization', 'pretrained_emb.png'))
+        # visualize latent space
+        if args.visualize_emb and epoch % args.visualize_emb == 0:
+            visualize_data(np.array(test_embs), test_true_labels, N_CLASS,
+                           os.path.join(args.results_path, 'visualization', f'pretrain_emb_epoch{epoch}.png'))
 
     logger.info(get_log_str(args, f'END PRETRAINING ON NODE {args.node}, '
                                   f'RANK: {args.rank}, TIME: {timeit.time.perf_counter() - pretrain_start:.2f}s'))
@@ -230,15 +243,25 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, devi
     best_score = 0
     not_improving_step = 0
 
-    alpha, beta, gamma = 1, 32, 1
+    # TODO
+    alpha, beta, gamma = [0, 1, 0] if args.training_strategy == 'no_pre_joint_training' else [1, 1, 1]
+    # alpha, beta, gamma = [0, 1, 0] if args.training_strategy == 'no_pre_joint_training' else [1, 32, 1]
+    # alpha, beta, gamma = [0, 1, 0] if args.training_strategy == 'no_pre_joint_training' else [0, 1, 0] # [0,1,0] mean drop decoders
     logger.info(f'initial loss weight: {alpha, beta, gamma}')
 
-    for epoch in range(0, args.joint_train_epochs,):
-        if not_improving_step >= 4 and not_improving_step % 4 == 0 and beta / 2 >= 8:
-            beta /= 2
-            logger.debug(f'dynamic loss_weight beta: {beta}')
+    for epoch in range(0, args.joint_train_epochs, ):
+        if args.training_strategy != 'no_pre_joint_training' and not_improving_step >= 4 \
+                and not_improving_step % 4 == 0 and alpha - .1 >= 0:
+            alpha -= 0.1
+            # alpha -= 2
+            # beta /= 2
+            gamma -= 0.1
+            # gamma /= 2
+            logger.debug(f'dynamic loss_weight: {alpha, beta, gamma}')
 
         loss_weight = [alpha, beta, gamma]
+        # loss_weight = [1, 1, 1]
+        # logger.debug(f'fixed loss_weight: {loss_weight}')
         epoch_start = timeit.time.perf_counter()
 
         n_train_pred_correct = 0
@@ -296,7 +319,7 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, devi
                 n_test_pred_correct += pred.eq(true_label).sum().item()
                 n_total_test_samples += len(RP)
 
-        # TODO: KLD batchmean loss should not be calculated in accumulate way. here for easy display loss info
+        # TODO: KLD batchmean loss should not be calculated in accumulate way. here just for easy display loss info
         train_loss = accum_train_loss / n_total_train_samples
         test_loss = accum_test_loss / n_total_test_samples
         train_acc = n_train_pred_correct / n_total_train_samples
@@ -312,7 +335,7 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, devi
         # visualize latent space
         if args.visualize_emb and epoch % args.visualize_emb == 0:
             visualize_data(np.array(test_embs), test_true_labels, N_CLASS,
-                           os.path.join(args.results_path, 'visualization', f'joint_training_emb_epoch{epoch}.png'))
+                           os.path.join(args.results_path, 'visualization', f'joint_train_emb_epoch{epoch}.png'))
 
         # early stop
         if test_acc > best_score:
@@ -320,6 +343,9 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, devi
             logger.info(get_log_str(args, f'★ SCORE IMPROVED FROM {best_score:.5f} TO {test_acc:.5f}'))
             try_to_save_model(args, model, os.path.join(args.results_path, f'{args.network}.pt'))
             best_score = test_acc
+            # reset loss weight to init value (not used)
+            # alpha, beta, gamma = [0, 1, 0] if args.training_strategy == 'no_pre_joint_training' else [1, 32, 1]
+            # logger.info(f'reset loss weight: {alpha, beta, gamma}')
         else:
             not_improving_step += 1
             if not_improving_step > args.patience:
@@ -419,7 +445,7 @@ def main_worker(proc, ngpus_per_node, args):
     else:
         cudnn.benchmark = True
 
-    # init distributed data parallel
+    # =========== INIT DISTRIBUTED DATA PARALLEL===========
     args.gpu = gpu
     if args.gpu is not None:
         logger.info(get_log_str(args, f"Node: {node}: use GPU: {args.gpu} for training"))
@@ -436,7 +462,7 @@ def main_worker(proc, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
 
-    # create model
+    # =========== CREATE MODEL ===========
     device = 'cpu'
     centroid = torch.from_numpy(np.load(f'./data/{args.dataset}_features/pedcc.npy'))
     if args.network == 'Dual_CSA':
@@ -485,7 +511,7 @@ def main_worker(proc, ngpus_per_node, args):
         device = f'cuda'
     logger.info(get_log_str(args, f'device: {device}'))
 
-    # loading data
+    # =========== LOADING DATA ===========
     train_dataset = dataset_factory.Trajectory_Feature_Dataset(args.dataset, 'train', )
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
@@ -498,7 +524,7 @@ def main_worker(proc, ngpus_per_node, args):
                              batch_size=args.batch_size,
                              shuffle=False, num_workers=args.workers, pin_memory=True)
 
-    # start training or evaluating
+    # =========== START TRAINING OR EVALUATING ===========
     if args.evaluate:
         model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
         test_predict(args, model, test_loader, device)
@@ -532,14 +558,14 @@ def main_worker(proc, ngpus_per_node, args):
             # load best Dual_CSA model to predict
             model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
             test_predict(args, model, test_loader, device)
-    # elif args.training_strategy == 'no_pre_joint_training':
-    #     # directly using PCC layer to classification, loss weight ==> 0, 1, 0
-    #     joint_train(args, model, train_loader, test_loader, train_sampler, [0, 1, 0], device)
-    #     # load best model to predict
-    #     model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
-    #     test_predict(args, model, test_loader, [0, 1, 0], device)
+    elif args.training_strategy == 'no_pre_joint_training':
+        # directly using PCC layer to classification, loss weight ==> 0, 1, 0
+        joint_train(args, model, train_loader, test_loader, train_sampler, device)
+        # load best model to predict
+        model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
+        test_predict(args, model, test_loader, device)
     elif args.training_strategy == 'only_joint_training':
-        joint_train(args, model, train_loader, test_loader, train_sampler,  device)
+        joint_train(args, model, train_loader, test_loader, train_sampler, device)
         # load best model to predict
         model = load_saved_model(args, os.path.join(args.results_path, f'{args.network}.pt'), model)
         test_predict(args, model, test_loader, device)

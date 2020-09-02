@@ -30,3 +30,19 @@ mkdir -p ${path}
 export RES_PATH=${path}
 python ./PEDCC.py --save_dir ./data/SHL_features --dim 304
 python network_training.py --dataset SHL --results-path ${path} --RP-emb-dim 152 --FS-emb-dim 152 --patience 40 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 410 --pretrained
+
+
+
+
+
+
+path=./results/predict_geolife_testset_using_SHL_model
+export RES_PATH=${path}
+python network_training.py --dataset SHL --results-path ${path}  --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 230 --e
+
+i=1
+dataset='SHL'
+path="./results/${dataset}_drop_decoder_exp${i}"
+mkdir ${path}
+export RES_PATH=${path}
+python network_training.py --dataset ${dataset} --results-path ${path}   --RP-emb-dim 152 --FS-emb-dim 152  --patience 15 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 410 --pretrained

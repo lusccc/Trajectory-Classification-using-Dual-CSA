@@ -75,26 +75,26 @@ def calc_handcrafted_features(feature_segments):
     return np.array(handcrafted_features_segments)
 
 
-def svc_classification(x_handcrafted_train, x_handcrafted_test, y_train, y_test):
+def svc_classification(dataset, x_handcrafted_train, x_handcrafted_test, y_train, y_test):
     clf = make_pipeline(StandardScaler(), SVC(gamma='auto'))
     # for svc, y is not one-hot encoding
     y_train_ = np.argmax(y_train, axis=1)
     clf.fit(x_handcrafted_train, y_train_)
     y_pred = clf.predict(x_handcrafted_test)
-    show_confusion_matrix(y_pred, y_test, 'SVC')
+    show_confusion_matrix(y_pred, y_test, 'SVC', dataset)
 
 
-def ml_algorithms(x_handcrafted_train, x_handcrafted_test, y_train, y_test):
+def ml_algorithms(dataset, x_handcrafted_train, x_handcrafted_test, y_train, y_test):
     ml_models = [RandomForestClassifier(), KNeighborsClassifier(), MLPClassifier(), DecisionTreeClassifier()]
     for i, model in enumerate(ml_models):
         print('$$$$ {} $$$$'.format(i))
         model.fit(x_handcrafted_train, y_train)
         y_pred = model.predict(x_handcrafted_test)
         y_pred = np.argmax(y_pred, axis=1)
-        show_confusion_matrix(y_pred, y_test, model.__class__.__name__)
+        show_confusion_matrix(y_pred, y_test, model.__class__.__name__, dataset)
 
 
-def show_confusion_matrix(y_pred, y_test, algorithm_name):
+def show_confusion_matrix(y_pred, y_test, algorithm_name, dataset_name):
     print('\n###########')
     y_true = np.argmax(y_test, axis=1)
     cm = confusion_matrix(y_true, y_pred, labels=modes_to_use)
@@ -102,7 +102,7 @@ def show_confusion_matrix(y_pred, y_test, algorithm_name):
     re = classification_report(y_true, y_pred, target_names=['walk', 'bike', 'bus', 'driving', 'train/subway'],
                                digits=5)
     logger.info(re)
-    with open(os.path.join(os.environ['RES_PATH'], f'{algorithm_name}_classification_results.txt'), 'a') as f:
+    with open(os.path.join(os.environ['RES_PATH'], f'{dataset_name}_{algorithm_name}_classification_results.txt'), 'a') as f:
         print(cm, file=f)
         print(re, file=f)
 
@@ -127,5 +127,5 @@ if __name__ == '__main__':
     x_test, y_test = load_data(dataset, 'test')
     x_handcrafted_train = calc_handcrafted_features(x_train)
     x_handcrafted_test = calc_handcrafted_features(x_test)
-    ml_algorithms(x_handcrafted_train, x_handcrafted_test, y_train, y_test)
-    svc_classification(x_handcrafted_train, x_handcrafted_test, y_train, y_test)
+    ml_algorithms(dataset, x_handcrafted_train, x_handcrafted_test, y_train, y_test, )
+    svc_classification(dataset, x_handcrafted_train, x_handcrafted_test, y_train, y_test, )

@@ -1,0 +1,3 @@
+bash run_lstm_fcn_softmax_exps.sh
+bash run_lstm_softmax_exps.sh
+bash run_rnn_softmax_exps.sh
