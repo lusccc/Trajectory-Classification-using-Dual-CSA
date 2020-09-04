@@ -71,13 +71,8 @@ class Dual_CSA(nn.Module):
 
 
 if __name__ == '__main__':
-    ces = torch.tensor(
-        [[1, 1, 1, 1],
-         [2, 2, 2, 2],
-         [3, 3, 3, 3],
-         [4, 4, 4, 4]]
-    )
-    model = Dual_CSA(5, 2, 2, ces)
+    ces = torch.rand(5, 304)
+    model = Dual_CSA(5, 152, 152, ces)
     model.pretrained = True
     print(model)
     summary(model, [(5, 184, 184), (5, 200)])

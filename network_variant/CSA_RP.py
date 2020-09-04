@@ -33,13 +33,8 @@ class CSA_RP(nn.Module):
 
 
 if __name__ == '__main__':
-    ces = torch.tensor(
-        [[1, 1, 1, 1],
-         [2, 2, 2, 2],
-         [3, 3, 3, 3],
-         [4, 4, 4, 4]]
-    )
-    model = CSA_RP(5, 4, ces)
-    model.pretrain = False
+    ces = torch.rand(5, 152)
+    model = CSA_RP(5, 152, ces)
+    model.set_pretrained(True)
     print(model)
     summary(model, (5, 184, 184))

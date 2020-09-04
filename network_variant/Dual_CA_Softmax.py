@@ -26,8 +26,9 @@ class Dual_CA_Softmax(nn.Module):
     def forward(self, RP, FS):
         RP_recon, RP_emb = self.RP_AE(RP)
         FS_recon, FS_emb = self.FS_AE(FS)
-        concat_emb = torch.cat((RP_emb, FS_emb), dim=1) if self.pretrained else None
-        return {'recon_ori': [(RP_recon, RP), (FS_recon, FS)], 'pred': concat_emb, 'emb': concat_emb}
+        concat_emb = torch.cat((RP_emb, FS_emb), dim=1)
+        pred = concat_emb if self.pretrained else None
+        return {'recon_ori': [(RP_recon, RP), (FS_recon, FS)], 'pred': pred, 'emb': concat_emb}
 
 
 if __name__ == '__main__':

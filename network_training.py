@@ -141,6 +141,7 @@ def pretrain(args, model, train_loader, test_loader, train_sampler=None, device=
                                               f'Loss: {loss.item():.6f}, '
                                               f'batch time: {timeit.time.perf_counter() - batch_start:.2f}s'))
         # ========== end train code ==========
+        logger.info(f'!!!epoch time: {timeit.time.perf_counter() - epoch_start:.2f}s')
 
         # ========== eval code ==========
         model.eval()
@@ -300,7 +301,7 @@ def joint_train(args, model, train_loader, test_loader, train_sampler=None, devi
                                               f'combine_loss: {combine_loss.item():.6f}, '
                                               f'batch time: {timeit.time.perf_counter() - batch_start:.2f}s'))
         # ========== end train code ==========
-
+        logger.info(f'!!!epoch time: {timeit.time.perf_counter() - epoch_start:.2f}s')
         # ========== eval code ==========
         model.eval()
         with torch.no_grad():

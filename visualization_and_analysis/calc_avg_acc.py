@@ -64,12 +64,23 @@ for j, res_path in enumerate(res_paths):
     path, dirs, files = next(os.walk(res_path))
     dir_count = len(dirs)
     total_accs = []
+    total_f1s = []
+    total_weighted_avgs = []
     for i in range(dir_count):
         exp_path = os.path.join(res_path, f'{res_subpaths[j]}{i}')
         log_path = os.path.join(exp_path, 'classification_results.txt')
         lines = open(log_path, encoding='utf-8').readlines()
-        acc = float(lines[-2][36:43])  # Penultimate line, and only cut acc value
+        acc = float(lines[-4][36:43])  # Penultimate line, and only cut acc value
         total_accs.append(acc)
+        total_f1s.append(
+            # walk              bike               bus                driving         train/subway
+            [lines[-10][36:43], lines[-9][36:43], lines[-8][36:43], lines[-7][36:43], lines[-6][36:43]]
+        )
+        total_weighted_avgs.append(float(lines[-2][36:43]))
     mean_acc = np.mean(total_accs, axis=0)
-    print('-'*200)
-    print(f'{res_path:<100} {mean_acc:<30} exp_times: {dir_count}')
+    total_f1s = np.array(total_f1s, dtype='float')
+    np.set_printoptions(formatter={'float_kind': "{:.5f}".format})
+    mean_f1 = np.mean(total_f1s, axis=0)
+    mean_weighted_avg = np.mean(total_weighted_avgs, axis=0)
+    print('-' * 250)
+    print(f'{res_subpaths[j]:<90} mean_acc: {mean_acc:<10.5f} mean_f1: {str(mean_f1):<45} f1_mean_weighted_avg: {mean_weighted_avg:<10.5f} exp_times: {dir_count}')
