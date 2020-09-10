@@ -65,7 +65,7 @@ def read_all_folders(path):
 if __name__ == '__main__':
     trjs = []
     trjs_labels = []
-    read_all_folders('/mnt/e/DATASET/SHLDataset_User1Hips_v1/release/User1')
+    read_all_folders('./data/SHL_raw')
     # read_all_folders('/mnt/e/DATASET/SHLDataset_preview_v1/User3')
     trjs = np.array(trjs)
     labels = np.array(trjs_labels)

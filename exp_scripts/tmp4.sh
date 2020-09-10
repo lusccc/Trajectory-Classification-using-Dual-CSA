@@ -66,6 +66,7 @@ dataset=geolife
 
 
 
+  python network_training.py --dataset SHL --results-path ./results/SHL_dca_softmax_exp3  --RP-emb-dim 152 --FS-emb-dim 152 --patience 15  -b 50 --network Dual_CA_Softmax
 
 
 

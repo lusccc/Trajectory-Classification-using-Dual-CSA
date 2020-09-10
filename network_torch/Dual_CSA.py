@@ -5,8 +5,8 @@ from logzero import logger
 from torch import device
 from torchsummary import summary
 
-from netwok_torch.Conv1D_AE import Conv1D_AE
-from netwok_torch.Conv2D_AE import Conv2D_AE
+from network_torch.Conv1D_AE import Conv1D_AE
+from network_torch.Conv2D_AE import Conv2D_AE
 
 
 class PCC_Layer(nn.Module):

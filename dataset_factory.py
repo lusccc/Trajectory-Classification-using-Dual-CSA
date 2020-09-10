@@ -15,7 +15,6 @@ from logzero import logger
 pathlib.Path(os.environ['RES_PATH']).mkdir(parents=True, exist_ok=True)
 logzero.logfile(os.path.join(os.environ['RES_PATH'], 'log.txt'), backupCount=3)
 
-import utils
 from MF_RP_mat_h5support import H5_NODE_NAME
 
 

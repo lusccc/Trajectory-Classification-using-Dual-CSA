@@ -8,13 +8,14 @@ from math import inf
 import torch.distributed as dist
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from sklearn.metrics import classification_report, confusion_matrix
 from torch import optim
 from torch.backends import cudnn
 from torch.utils.data import DataLoader
 import torch.multiprocessing as mp
 import dataset_factory
-from netwok_torch.Dual_CSA import Dual_CSA
+from network_torch.Dual_CSA import Dual_CSA
 from network_variant.CSA_FS import CSA_FS
 from network_variant.CSA_RP import CSA_RP
 from network_variant.Dual_CA_Softmax import Dual_CA_Softmax
@@ -469,7 +470,7 @@ def main_worker(proc, ngpus_per_node, args):
     if args.network == 'Dual_CSA':
         model = Dual_CSA(args.n_features, args.RP_emb_dim, args.FS_emb_dim, centroid)
     elif args.network == 'Dual_CA_Softmax':
-        model = Dual_CA_Softmax(args.n_features, args.RP_emb_dim, args.FS_emb_dim)
+        model = Dual_CA_Softmax(args.n_features, args.RP_emb_dim, args.FS_emb_dim, args.n_features)
     elif args.network == 'CSA_RP':
         model = CSA_RP(args.n_features, args.RP_emb_dim, centroid)
         assert args.RP_emb_dim == centroid.shape[1]
@@ -575,16 +576,26 @@ def main_worker(proc, ngpus_per_node, args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DCSA_Training')
-    parser.add_argument('--dataset', type=str, required=True)
-    parser.add_argument('--network', type=str, default='Dual_CSA')
-    parser.add_argument('--results-path', default='./results/default', type=str)
-    parser.add_argument('--RP-emb-dim', type=int)
-    parser.add_argument('--FS-emb-dim', type=int)
-    parser.add_argument('--patience', type=int, default=15)
-    parser.add_argument('--training-strategy', type=str, default='normal_training')
-    parser.add_argument('--no-save-model', action='store_true')
-    parser.add_argument('--visualize-emb', type=int, default=0)
-    parser.add_argument('--n-features', type=int, default=N_CLASS)
+    parser.add_argument('--dataset', type=str, required=True,
+                        help='geolife or SHL')
+    parser.add_argument('--network', type=str, default='Dual_CSA',
+                        help='default is Dual_CSA, can be the variants: CSA-RP, CSA-FS, and Dual-CA-Softmax')
+    parser.add_argument('--results-path', default='./results/default', type=str,
+                        help='path to save the training and predict results')
+    parser.add_argument('--RP-emb-dim', type=int,
+                        help='embedding dimension of RP autoencoder in latent space')
+    parser.add_argument('--FS-emb-dim', type=int,
+                        help='embedding dimension of FS autoencoder in latent space')
+    parser.add_argument('--patience', type=int, default=15,
+                        help='patience of early stop in joint training')
+    parser.add_argument('--training-strategy', type=str, default='normal_training',
+                        help='can be: normal_training, normal_only_pretraining, no_pre_joint_training, and only_joint_training ')
+    parser.add_argument('--no-save-model', action='store_true',
+                        help='this flag will not save model')
+    parser.add_argument('--visualize-emb', type=int, default=0,
+                        help='this flag will turn on save latent visualization images every visualize_emb epochs')
+    parser.add_argument('--n-features', type=int, default=len(FEATURES_SET_1),
+                        help='number of MFs and AFs used, default 5')
 
     parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
