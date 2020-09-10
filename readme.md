@@ -11,7 +11,9 @@ omitted until published
 - Complete code support from preprocessing to results visualization. In particular, the preprocessing code is easy to migrate to other dataset.
 - Most of the code is commented with detail explanation.
 - The preprocessing support multi-process to speed up running time.
+- The large data such as recurrence plots are generated in hard disk using Pytables, rather than RAM, which saves a lot of memory.
 - The training support single GPU, multi-GPUs, multi-Nodes, and CPU.
+- All the experiments in tha paper can be run using the shell scripts we wrote.
 
 ##  Requirements
 - Install PyTorch ([pytorch.org](http://pytorch.org))
