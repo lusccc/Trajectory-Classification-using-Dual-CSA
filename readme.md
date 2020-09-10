@@ -1,8 +1,6 @@
 # Trajectory Classification Using Dual-CSA
 This project is the code of the paper _Dual Supervised Autoencoder Based Trajectory Classification Using Enhanced Spatio-Temporal Information_
 
-
-
 ## Abstract
 omitted until published
 
@@ -14,6 +12,12 @@ omitted until published
 - `pip install -r requirements.txt`
 - Download Geolife dataset at: https://www.microsoft.com/en-us/research/project/geolife-buildingsocial-networks-using-human-location-history/#!downloads, then put all user folders under `Geolife Trajectories 1.3-Raw-All/Geolife Trajectories 1.3/Data` into our project folder `./data/geolife_raw`
 - Download SHL dataset at: http://www.shl-dataset.org/download/, then put all folders under `SHLDataset_User1Hips_v1/release/User1` into our project folder `./data/SHL_raw`
+
+## Highlights of The Code ✨
+- Complete code support from preprocessing to results visualization. In particular, the preprocessing code is easy to migrate to other dataset.
+- Most of the code is commented with detail explanation.
+- The preprocessing support multi-process to speed up running time.
+- The training support single GPU, multi-GPUs, multi-Nodes, and CPU.
 
 ## File Structure
 - Extracted trajectories and labels from raw dataset & Generated handcrafted features and recurrence plots (RPs) are under `./data`
@@ -149,3 +153,4 @@ python ./MF_RP_mat_h5support.py --dim 3 --tau 8 --multi_feature_segs_path ./data
 python ./PEDCC.py --save_dir ./data/SHL_features --dim 304
 python network_training.py --dataset ${dataset} --results-path ${results_path}  --RP-emb-dim 152 --FS-emb-dim 152 --patience 20 --dist-url tcp://127.0.0.1:6666 --dist-backend nccl --multiprocessing-distributed --world-size 1 --rank 0 -b 230
 ```
+#### Feel free to post issues if you have any questions. (English and Chinese 中文)
