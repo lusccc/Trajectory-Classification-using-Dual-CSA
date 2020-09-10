@@ -42,7 +42,7 @@ $ export RES_PATH=${results_path}
 ```
 python ./trajectory_segmentation_and_features_extraction.py --trjs_path ./data/geolife_extracted/trjs_train.npy --labels_path ./data/geolife_extracted/labels_train.npy --seg_size 200 --data_type train --save_dir ./data/geolife_features
 ``` 
-where `seg_size` if max number of points in a segment.
+where `seg_size` is max number of points in a segment.
 - `MF_RP_mat_h5support.py` is used to generate RPs for feature segments generated above. For example: 
  ````
  python ./MF_RP_mat_h5support.py --dim 3 --tau 8 --multi_feature_segs_path ./data/geolife_features/multi_feature_segs_train.npy --save_path ./data/geolife_features/multi_channel_RP_mats_train.h5
