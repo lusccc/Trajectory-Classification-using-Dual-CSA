@@ -1,19 +1,4 @@
-# Trajectory Classification Using Dual-CSA
-This project is the code of the paper _Dual Supervised Autoencoder Based Trajectory Classification Using Enhanced Spatio-Temporal Information_  
-The paper is available at: https://ieeexplore.ieee.org/document/9204708/
 
-## Abstract
-With the rapid development of mobile internet and location awareness techniques, massive spatio-temporal data is collected every day. Trajectory classification is critically important to many
-real-world applications such as human mobility understanding, urban planning, and intelligent transportation systems. A growing number of studies took advantage of the deep learning method to learn the
-high-level features of trajectory data for accurate estimation. However, some of these studies didn’t interpret
-spatio-temporal information well, more importantly, they didn’t fully utilize the high-level features extracted
-by neural networks. To overcome these drawbacks, this paper utilizes the proposed stop state and turn state
-to enhance spatial information, and at the same time, extracts stronger time information via Recurrence Plot
-(RP). Moreover, a novel Dual Convolutional neural networks based Supervised Autoencoder (Dual-CSA)
-is proposed by making the network aware of Predefined Class Centroids (PCC). Experiments conducted
-on two real-world datasets demonstrate that Dual-CSA can learn the high-level features well. The highest
-accuracy of the Geolife and SHL datasets are 89.475% and 89.602%, respectively, proving the superiority
-of our method.
 
 ## Framework Overview
 ![avatar](framework.png)
